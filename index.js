@@ -8,12 +8,18 @@ const d3 = require('d3-node')().d3;
 const d3nLine = require('./d3node-linechart.js');
 const output = require('./d3node-output.js');
 // API 
-const API_URL = "https://corona.lmao.ninja/v2/all"
+const API_URL = (countryCode) => countryCode == 'all' ? "https://corona.lmao.ninja/v2/all" : "https://corona.lmao.ninja/v3/covid-19/countries/"+countryCode
 const API_URL_HISTORICAL = (countryCode="US", days=90) => "https://disease.sh/v3/covid-19/historical/"+countryCode+"?lastdays="+days
+const API_URL_COUNTRIES = () => "https://disease.sh/v3/covid-19/countries?sort=cases"
+const API_URL_STATE = (stateCode) => "https://disease.sh/v3/covid-19/states/"+stateCode
+const API_URL_STATES = () => "https://disease.sh/v3/covid-19/states"
+const API_URL_HISTORICAL_STATE = (s, days=3) => 'https://corona.lmao.ninja/v3/covid-19/historical/usacounties/'+s+'?lastdays='+days
 
 const ROLLING_DAYS = 7
 const DATA_START_DATE = '2020-03-01'
 const DAYS_OF_DATA = moment().diff(moment(DATA_START_DATE), 'days')
+const MAX_COUNTRIES = 30
+const WAIT_TIME = 31 * 1000
 
 const M = new Mastodon({
   access_token: process.env.MASTADON_ACCESS_TOKEN,
@@ -56,19 +62,62 @@ const toot = function(status, media) {
     })
 }
 
-const fetchStats = async () => 
-    await got(API_URL).json()
+const fetchStats = async (region) => {
+    console.log(region)
+    let regionCode = region.iso2
+    let url = region.state ? API_URL_STATE(regionCode) : API_URL(regionCode)
+    try {
+        return await got(url).json()
+    } catch(e) {
+        console.log('Failed to fetch stats for '+regionCode+' at '+url)
+        console.log(e);
+    }
+}
 
+const capitalizeFirstLetter = function(string) {
+  return string.charAt(0).toUpperCase() + string.slice(1);
+}
 
-const getMsgFromStats = function(stats) {
+const emojiFlags = require('emoji-flags');
+const getStateEmoji = function(code) {
+    
+    let ccFlag = emojiFlags.countryCode(code)
+    
+    if(ccFlag && ccFlag.emoji) {
+        return ccFlag.emoji
+    }
+    
+    if(code === 'Arizona') return '🌵';
+    if(code === 'California') return '🏄';
+    if(code === 'Florida') return '🍊';
+    if(code === 'Texas') return '🐍';
+    if(code === 'Massachusetts') return '🏛';
+    if(code === 'New York') return '🗽';
+    if(code === 'Oregon') return '🌲';
+    if(code === 'Washington') return '🌲';
+    if(code === 'all') return '🌐';
+    if(code === 'US') return '🇺🇸';
+    if(code === 'BR') return '🇧🇷';
+    if(code === 'RU') return '🇷🇺';
+    return '🏴'
+}
+
+const getCountryCodeName = country => {
+    return capitalizeFirstLetter(country.name) + ' ' + getStateEmoji(country.iso2)
+}
+
+const getMsgFromStats = function(country, stats) {
+    let name = country.name
     let today = (new Date().toDateString())
-    let msg = 'Coronavirus COVID-19 current stats for '+today+'\n\n'
-                + 'World 🌐\n'
+    let msg = getCountryCodeName(country)+' COVID-19 current stats for '+today+'\n\n'
     
     msg += 'Cases: '+stats['cases'].toLocaleString() + '\n'
     msg += 'Deaths: '+stats['deaths'].toLocaleString() + '\n'
     msg += 'Recovered: '+stats['recovered'].toLocaleString() + '\n'
     msg += 'Active: '+stats['active'].toLocaleString() + '\n'
+
+    msg += '\n'
+    msg += '#covid_'+country.iso2.toLocaleLowerCase()
     
     return msg
 }
@@ -138,23 +187,57 @@ const renderPie = function(data) {
     })
 }
 
+const parse_state_counties = function(json) {
+    // Sum up all the counties
+    let newJson = {
+        "cases": {},
+        "deaths": {},
+        "recovered": {},
+    }
+    
+    for(let i in json) {
+        let timeline = json[i].timeline;
+        for(let t in timeline) {
+            // t is cases, deaths, recovered
+            for(let d in timeline[t]) {
+                // d is date
+                let v = timeline[t][d]; // number value
+                
+                if(!newJson[t].hasOwnProperty(d)) {
+                    newJson[t][d] = v;
+                } else {
+                    newJson[t][d] += v;
+                }
+            }
+        }
+    }
+    return newJson
+}
 
 const parseTime = d3.timeParse("%m/%d/%y")
 
-const fetchRollingAvg = async (countryCode, days) => {
-    let data = await got(API_URL_HISTORICAL(countryCode, days)).json()
-    
-    // console.log(data)
-    
-    let timeline = data.timeline
+const fetchRollingAvg = async (country, days) => {
+    let countryCode = country.iso2
+    let url = country.state ? API_URL_HISTORICAL_STATE(countryCode.toLocaleLowerCase(), days) : API_URL_HISTORICAL(countryCode, days)
+    let data
+    try {
+        data = await got(url).json()
+    } catch(e) {
+        console.log('Failed to get historical data for '+countryCode+' via '+url)
+    }
+    let timeline
+    if(country.state) {
+        timeline = parse_state_counties(data)
+    } else if(countryCode == 'all') {
+        timeline = data
+    } else {
+        timeline = data.timeline
+    }
     let keys = ['cases', 'deaths']
-    
     let vals = {} // { "cases": [{key: Date, value: int}...], "deaths": [...]}
     let rollingAverages = {} // { "cases": [...], "deaths": [...]}
     
     keys.forEach(k => {
-        // console.log(k)
-        // console.log(timeline[k])
         if(!vals.hasOwnProperty(k)) {
             vals[k] = []
         }
@@ -172,7 +255,6 @@ const fetchRollingAvg = async (countryCode, days) => {
             }
             prevVal = value
         }
-        // console.log(vals)
         
         if(!rollingAverages.hasOwnProperty(k)) {
             rollingAverages[k] = []
@@ -193,25 +275,21 @@ const fetchRollingAvg = async (countryCode, days) => {
                 })
             }
         }
-        // console.log(rollingAverages)
     })
     
     return rollingAverages
 }
 
 
-const renderLineChart = (stats, sourceName) => {
+const renderLineChart = (stats, sourceName, flagUrl) => {
 
-    // console.log(stats)
-    // stats = {deaths: [], cases: []}
-    
     let chartData = []
     chartData.allKeys = stats.deaths.map(o => o.key)
     chartData.push(stats.deaths)
     chartData.push(stats.cases)
-    // console.log(chartData)
     
     let chartTitle = sourceName+' covid <span style="color: maroon;">deaths</span> and <span style="color: steelblue;">cases</span> '+ROLLING_DAYS+'-day rolling average'
+    let chartBg = flagUrl ? '<img src="'+flagUrl+'" style="position:fixed; top: 0; left: 0; opacity:0.12; min-height: 100%; min-width: 500px; width: 100%; height: auto;" />' : ''
     return new Promise((resolve, reject) => {
         output(
             "./output/chart",
@@ -226,7 +304,8 @@ const renderLineChart = (stats, sourceName) => {
                 lineColors: ['maroon', 'steelblue'],
                 container: `
                     <div id="container">
-                        <h3 style="padding: 0 0; margin: 0 0;">${chartTitle}</h3>
+                        <h3 style="padding: 0 0; margin: 0 0;text-align:center;">${chartTitle}</h3>
+                        ${chartBg}
                         <div id="chart"></div>
                     </div>
                 `
@@ -242,23 +321,86 @@ const renderLineChart = (stats, sourceName) => {
     })
 }
 
-const run = async () => {
-    let stats = await fetchStats()
-    let tootMsg = getMsgFromStats(stats)
-    // console.log(tootMsg)
-    
-    let rollingAvgStats = await fetchRollingAvg("US", DAYS_OF_DATA)
-    let pngPath = await renderLineChart(rollingAvgStats, "US")
-    console.log("PNG path: "+pngPath)
-    
+const generateRegionChart = async (country, days) => {
+    let regionCode = country.iso2
+    let stats = await fetchStats(country)
+    let tootMsg = getMsgFromStats(country, stats)
+    console.log(tootMsg)
+    let rollingAvgStats = await fetchRollingAvg(country, days)
+    let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag)
     let t = await toot(tootMsg, pngPath)
-    // console.log('DONE!')
-    // process.exit(0)
-    
-    // post media
-    // toot
 }
+
+const fetchCountries = async max => {
+    try {
+        let countries = await got(API_URL_COUNTRIES()).json()
+        return countries.map(o => {
+            let c = o.countryInfo
+            c.name = o.country
+            console.log(c)
+            return c
+        }).slice(0, max)
+    } catch(e) {
+        console.log('Failed to fetch countries')
+        console.log(e);
+    }
+}
+
+const fetchStates = async () => {
+    try {
+        let states = await got(API_URL_STATES()).json()
+        return states.map(o => {
+            return {
+                iso2: o.state,
+                name: o.state,
+                state: true,
+                flag: false
+            }
+        })
+    } catch(e) {
+        console.log('Failed to fetch states')
+        console.log(e);
+    }
+}
+
+const wait = async (dur) => {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            resolve()
+        }, dur)
+    })
+}
+
+const run = async () => {
+    
+    // WORLD
+    await generateRegionChart({iso2: 'all', flag: false, name: 'World'}, DAYS_OF_DATA)
+    await wait(WAIT_TIME)
+    
+    // COUNTRIES
+    let countries = await fetchCountries(MAX_COUNTRIES)
+    for(let i in countries) {
+        await generateRegionChart(countries[i], DAYS_OF_DATA)
+        await wait(WAIT_TIME)
+    }
+    // await generateRegionChart('all', DAYS_OF_DATA)
+    // await generateRegionChart('US', DAYS_OF_DATA)
+    
+    // US STATES
+    let states = await fetchStates()
+    for(let i in states) {
+        await generateRegionChart(states[i], DAYS_OF_DATA)
+        await wait(WAIT_TIME)
+    }
+    // await generateRegionChart({
+    //     iso2: 'Arizona', flag: false, name: 'Arizona', state: true
+    // }, DAYS_OF_DATA)
+    
+    process.exit(0)
+}
+
 run()
+
 // fetchStats().then((stats)=>{
     // let tootMsg = getMsgFromStats(stats)
     // renderPie([

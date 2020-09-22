@@ -13,10 +13,14 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   .then((browser) => {
     browser.newPage()
     .then((page) => {
-      page.setContent(html)
+    //   page.setContent(html)
+      page.goto(`data:text/html,${html}`, { waitUntil: 'networkidle0'});
       if (viewport) {
         page.setViewport(viewport);
       }
+      setTimeout(() => {
+          
+      
       page.screenshot(screenShotOptions)
       .then(() => browser.close())
       .then(() => {
@@ -24,6 +28,8 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
         if (typeof callback === 'function') callback();
       })
       .catch(console.error);
+      
+      }, 5000)
     })
   })
   .catch(console.error)

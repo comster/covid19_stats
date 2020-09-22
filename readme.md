@@ -79,7 +79,6 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 
 # TODO
 
-- [ ] Chart moving average
+- [x] Chart moving average
 - Local stats
 - Tweet
-- Show rate of change (day over day)
