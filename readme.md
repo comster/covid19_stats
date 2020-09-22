@@ -76,9 +76,8 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 - Countries
 - US State
 
-
 # TODO
 
 - [x] Chart moving average
-- Local stats
+- [x] Regional stats (Countries & US States)
 - Tweet

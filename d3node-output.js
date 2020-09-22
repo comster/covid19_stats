@@ -29,7 +29,7 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
       })
       .catch(console.error);
       
-      }, 5000)
+      }, 5000) // TODO Fix this (known issue with puppeteer?) // https://github.com/puppeteer/puppeteer/issues/338 // https://github.com/UN-OCHA/tools-snap-service/pull/51/files // https://github.com/puppeteer/puppeteer/issues/728
     })
   })
   .catch(console.error)
