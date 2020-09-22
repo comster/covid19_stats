@@ -1,8 +1,9 @@
 const fs = require('fs')
-// const request = require('request');
 const got = require('got');
 const moment = require('moment');
 const Mastodon = require('mastodon-api')
+
+const utils = require('./utils')
 
 const d3 = require('d3-node')().d3;
 const d3nLine = require('./d3node-linechart.js');
@@ -14,12 +15,14 @@ const API_URL_COUNTRIES = () => "https://disease.sh/v3/covid-19/countries?sort=c
 const API_URL_STATE = (stateCode) => "https://disease.sh/v3/covid-19/states/"+stateCode
 const API_URL_STATES = () => "https://disease.sh/v3/covid-19/states"
 const API_URL_HISTORICAL_STATE = (s, days=3) => 'https://corona.lmao.ninja/v3/covid-19/historical/usacounties/'+s+'?lastdays='+days
+const API_URL_STATE_FLAG = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/flags/"+utils.replaceAll(state, ' ', '-').toLocaleLowerCase()+"-large.png"
+const API_URL_STATE_LANDSCAPE = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/backgrounds/640x360/landscape/"+state.toLocaleLowerCase()+".jpg"
 
 const ROLLING_DAYS = 7
 const DATA_START_DATE = '2020-03-01'
 const DAYS_OF_DATA = moment().diff(moment(DATA_START_DATE), 'days')
-const MAX_COUNTRIES = 30
-const WAIT_TIME = 31 * 1000
+const MAX_COUNTRIES = 52
+const MEDIA_WAIT_TIME = 61 * 1000
 
 const M = new Mastodon({
   access_token: process.env.MASTADON_ACCESS_TOKEN,
@@ -63,7 +66,6 @@ const toot = function(status, media) {
 }
 
 const fetchStats = async (region) => {
-    console.log(region)
     let regionCode = region.iso2
     let url = region.state ? API_URL_STATE(regionCode) : API_URL(regionCode)
     try {
@@ -74,42 +76,10 @@ const fetchStats = async (region) => {
     }
 }
 
-const capitalizeFirstLetter = function(string) {
-  return string.charAt(0).toUpperCase() + string.slice(1);
-}
-
-const emojiFlags = require('emoji-flags');
-const getStateEmoji = function(code) {
-    
-    let ccFlag = emojiFlags.countryCode(code)
-    
-    if(ccFlag && ccFlag.emoji) {
-        return ccFlag.emoji
-    }
-    
-    if(code === 'Arizona') return '🌵';
-    if(code === 'California') return '🏄';
-    if(code === 'Florida') return '🍊';
-    if(code === 'Texas') return '🐍';
-    if(code === 'Massachusetts') return '🏛';
-    if(code === 'New York') return '🗽';
-    if(code === 'Oregon') return '🌲';
-    if(code === 'Washington') return '🌲';
-    if(code === 'all') return '🌐';
-    if(code === 'US') return '🇺🇸';
-    if(code === 'BR') return '🇧🇷';
-    if(code === 'RU') return '🇷🇺';
-    return '🏴'
-}
-
-const getCountryCodeName = country => {
-    return capitalizeFirstLetter(country.name) + ' ' + getStateEmoji(country.iso2)
-}
-
 const getMsgFromStats = function(country, stats) {
     let name = country.name
     let today = (new Date().toDateString())
-    let msg = getCountryCodeName(country)+' COVID-19 current stats for '+today+'\n\n'
+    let msg = utils.getCountryCodeName(country)+' COVID-19 current stats for '+today+'\n\n'
     
     msg += 'Cases: '+stats['cases'].toLocaleString() + '\n'
     msg += 'Deaths: '+stats['deaths'].toLocaleString() + '\n'
@@ -117,75 +87,66 @@ const getMsgFromStats = function(country, stats) {
     msg += 'Active: '+stats['active'].toLocaleString() + '\n'
 
     msg += '\n'
-    msg += '#covid_'+country.iso2.toLocaleLowerCase()
+    msg += '#covid_'+utils.replaceAll(country.iso2.toLocaleLowerCase(), ' ', '_')
     
     return msg
 }
 
-const renderPie = function(data) {
-    const D3Node = require('d3-node')
-    const d3 = require('d3')
-    const canvasModule = require('canvas')
-    let d3n = new D3Node({ canvasModule });
-    
-    let canvas = d3n.createCanvas(500, 300)
-    
-    let context = canvas.getContext('2d')
-    
-    let width = canvas.width
-    let height = canvas.height
-    let radius = Math.min(width, height) / 2
-    
-    // active // deaths // recovered
-    let colors = ["#000099", "#990000", "#009900"]
-    
-    var arc = d3.arc()
-      .outerRadius(radius - 10)
-      .innerRadius(0)
-      .context(context)
-    
-    var labelArc = d3.arc()
-      .outerRadius(radius - 40)
-      .innerRadius(radius - 40)
-      .context(context)
-    
-    var pie = d3.pie()
-      .sort(null)
-      .value(function (d) { return d.value })
-        
-    context.translate(width / 2, height / 2)
-    
-    var arcs = pie(data)
-        
-    arcs.forEach(function (d, i) {
-      context.beginPath()
-      arc(d)
-      context.fillStyle = colors[i]
-      context.fill()
-    })
-    
-    context.beginPath()
-    arcs.forEach(arc)
-    context.strokeStyle = '#000'
-    context.stroke()
-    
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.fillStyle = '#fff'
-    context.font = "bold 18pt Courier";
-    
-    arcs.forEach(function (d) {
-      var c = labelArc.centroid(d)
-    //   if(d.index === 1) { // deaths
-    //       c[1] = c[1] + 30 // offset this to avoid overlap
-    //   }
-      context.fillText(d.data.name, c[0], c[1])
-    })
-    
-    return new Promise((resolve, reject) => {
-        resolve(canvas.toDataURL());
-    })
-}
+// const renderPie = function(data) {
+//     const D3Node = require('d3-node')
+//     const d3 = require('d3')
+//     const canvasModule = require('canvas')
+//     let d3n = new D3Node({ canvasModule });
+//     let canvas = d3n.createCanvas(500, 300)
+//     let context = canvas.getContext('2d')
+//     let width = canvas.width
+//     let height = canvas.height
+//     let radius = Math.min(width, height) / 2
+//     // active // deaths // recovered
+//     let colors = ["#000099", "#990000", "#009900"]
+//     var arc = d3.arc()
+//       .outerRadius(radius - 10)
+//       .innerRadius(0)
+//       .context(context)
+//     var labelArc = d3.arc()
+//       .outerRadius(radius - 40)
+//       .innerRadius(radius - 40)
+//       .context(context)
+//     var pie = d3.pie()
+//       .sort(null)
+//       .value(function (d) { return d.value })
+//     context.translate(width / 2, height / 2)
+//     var arcs = pie(data)
+//     arcs.forEach(function (d, i) {
+//       context.beginPath()
+//       arc(d)
+//       context.fillStyle = colors[i]
+//       context.fill()
+//     })
+//     context.beginPath()
+//     arcs.forEach(arc)
+//     context.strokeStyle = '#000'
+//     context.stroke()
+//     context.textAlign = 'center'
+//     context.textBaseline = 'middle'
+//     context.fillStyle = '#fff'
+//     context.font = "bold 18pt Courier";
+//     arcs.forEach(function (d) {
+//       var c = labelArc.centroid(d)
+//     //   if(d.index === 1) { // deaths
+//     //       c[1] = c[1] + 30 // offset this to avoid overlap
+//     //   }
+//       context.fillText(d.data.name, c[0], c[1])
+//     })
+//     return new Promise((resolve, reject) => {
+//         resolve(canvas.toDataURL());
+//     })
+// }
+// renderPie([
+//     {"name": "Active", "value": stats['active']},
+//     {"name": "Deaths", "value": stats['deaths']},
+//     {"name": "Recovered", "value": stats['recovered']},
+// ])
 
 const parse_state_counties = function(json) {
     // Sum up all the counties
@@ -280,9 +241,7 @@ const fetchRollingAvg = async (country, days) => {
     return rollingAverages
 }
 
-
 const renderLineChart = (stats, sourceName, flagUrl) => {
-
     let chartData = []
     chartData.allKeys = stats.deaths.map(o => o.key)
     chartData.push(stats.deaths)
@@ -322,10 +281,11 @@ const renderLineChart = (stats, sourceName, flagUrl) => {
 }
 
 const generateRegionChart = async (country, days) => {
-    let regionCode = country.iso2
     let stats = await fetchStats(country)
     let tootMsg = getMsgFromStats(country, stats)
+    
     console.log(tootMsg)
+    
     let rollingAvgStats = await fetchRollingAvg(country, days)
     let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag)
     let t = await toot(tootMsg, pngPath)
@@ -354,63 +314,68 @@ const fetchStates = async () => {
                 iso2: o.state,
                 name: o.state,
                 state: true,
-                flag: false
+                flag: API_URL_STATE_FLAG(o.state)
             }
-        })
+        }).filter(isStateIncluded)
     } catch(e) {
         console.log('Failed to fetch states')
         console.log(e);
     }
 }
 
-const wait = async (dur) => {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            resolve()
-        }, dur)
-    })
+const isStateIncluded = (state) => {
+    let s = state.iso2
+    if(
+        s === 'Navajo Nation'
+        || s === 'Federal Prisons'
+        || s === 'Veteran Affairs'
+        || s === 'United States Virgin Islands'
+        || s === 'Grand Princess Ship'
+        || s === 'Wuhan Repatriated'
+        || s === 'Diamond Princess Ship'
+        || s === 'Northern Mariana Islands'
+        || s === 'Guam'
+        || s === 'Puerto Rico'
+        || s === 'US Military'
+    ) return false
+    return true
 }
 
+const RUN_WORLD = !process.env.EXCLUDE_WORLD ? true : false
+const RUN_COUNTRIES = !process.env.EXCLUDE_COUNTRIES ? true : false
+const RUN_STATES = !process.env.EXCLUDE_STATES ? true : false
+
 const run = async () => {
-    
     // WORLD
-    await generateRegionChart({iso2: 'all', flag: false, name: 'World'}, DAYS_OF_DATA)
-    await wait(WAIT_TIME)
-    
-    // COUNTRIES
-    let countries = await fetchCountries(MAX_COUNTRIES)
-    for(let i in countries) {
-        await generateRegionChart(countries[i], DAYS_OF_DATA)
-        await wait(WAIT_TIME)
+    if(RUN_WORLD) {
+        await generateRegionChart({iso2: 'all', flag: false, name: 'World'}, DAYS_OF_DATA)
+        await utils.wait(MEDIA_WAIT_TIME)
     }
-    // await generateRegionChart('all', DAYS_OF_DATA)
-    // await generateRegionChart('US', DAYS_OF_DATA)
     
     // US STATES
-    let states = await fetchStates()
-    for(let i in states) {
-        await generateRegionChart(states[i], DAYS_OF_DATA)
-        await wait(WAIT_TIME)
+    if(RUN_STATES) {
+        let states = await fetchStates()
+        for(let i in states) {
+            await generateRegionChart(states[i], DAYS_OF_DATA)
+            await utils.wait(MEDIA_WAIT_TIME)
+        }
     }
     // await generateRegionChart({
     //     iso2: 'Arizona', flag: false, name: 'Arizona', state: true
     // }, DAYS_OF_DATA)
     
+    // COUNTRIES
+    if(RUN_COUNTRIES) {
+        let countries = await fetchCountries(MAX_COUNTRIES)
+        for(let i in countries) {
+            await generateRegionChart(countries[i], DAYS_OF_DATA)
+            await utils.wait(MEDIA_WAIT_TIME)
+        }
+    }
+    // await generateRegionChart('all', DAYS_OF_DATA)
+    // await generateRegionChart('US', DAYS_OF_DATA)
+    
     process.exit(0)
 }
 
 run()
-
-// fetchStats().then((stats)=>{
-    // let tootMsg = getMsgFromStats(stats)
-    // renderPie([
-    //     {"name": "Active", "value": stats['active']},
-    //     {"name": "Deaths", "value": stats['deaths']},
-    //     {"name": "Recovered", "value": stats['recovered']},
-    // ]).then(tootMedia => {
-        // toot(tootMsg, tootMedia).then(t => {
-        //     console.log('DONE!')
-        //     process.exit(0)
-        // })
-    // })
-// })

@@ -81,3 +81,5 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 - [x] Chart moving average
 - [x] Regional stats (Countries & US States)
 - Tweet
+- Subscribe to hashtag
+- https://botsin.space/auth/sign_up

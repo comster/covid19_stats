@@ -12,15 +12,19 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
     })
   .then((browser) => {
     browser.newPage()
-    .then((page) => {
+    .then(async (page) => {
     //   page.setContent(html)
-      page.goto(`data:text/html,${html}`, { waitUntil: 'networkidle0'});
+      await page.goto(`data:text/html,${html}`, { waitUntil: 'networkidle0'});
+    //     await page.goto(url, { waitUntil: 'load' });
+    //     await page.goto(url, { waitUntil: 'domcontentloaded' });
+    //     await page.goto(url, { waitUntil: 'networkidle0' });
+    //     await page.goto(url, { waitUntil: 'networkidle2' });
+
       if (viewport) {
         page.setViewport(viewport);
       }
-      setTimeout(() => {
-          
       
+    //   setTimeout(() => {
       page.screenshot(screenShotOptions)
       .then(() => browser.close())
       .then(() => {
@@ -28,8 +32,7 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
         if (typeof callback === 'function') callback();
       })
       .catch(console.error);
-      
-      }, 5000) // TODO Fix this (known issue with puppeteer?) // https://github.com/puppeteer/puppeteer/issues/338 // https://github.com/UN-OCHA/tools-snap-service/pull/51/files // https://github.com/puppeteer/puppeteer/issues/728
+    //   }, 5000) // TODO Fix this (known issue with puppeteer?) // https://github.com/puppeteer/puppeteer/issues/338 // https://github.com/UN-OCHA/tools-snap-service/pull/51/files // https://github.com/puppeteer/puppeteer/issues/728
     })
   })
   .catch(console.error)
