@@ -2,6 +2,10 @@
 
 This is a demo project that will automatically post Covid-19 stats to mastadon (toot).
 
+[https://mastodon.cloud/@covid_stats](https://mastodon.cloud/@covid_stats)
+
+[GitLab](https://gitlab.com/comster/covid19_stats) | [GitHub](https://github.com/comster/covid19_stats)
+
 ## 1) Automated toots
 
 Using the code example from my [quick_toot](https://github.com/comster/quick_toot) project, we will setup automated tooting of text and an image.
@@ -9,7 +13,7 @@ Using the code example from my [quick_toot](https://github.com/comster/quick_too
 - Create app
 - Get token
 - Test toot 
-
+- https://mastodon.cloud/web/accounts/731776
 
 ## 2) Create our node.js project
 
@@ -45,9 +49,37 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 - Setup schedule
 
 
-## 6) TODO
+## 6) Line chart showing 7 day moving average of both deaths and cases
 
+- Parse historical data into 7 day moving average
+- Render into multi-line chart for both deaths and cases
+- Include dependancies for headless chrome in docker
+
+
+## 7) Line chart
+
+- 7-day rolling average
+- Deaths
+- Cases
+- 2 y axis labels
+- Color coated
+
+
+## 8) Deployment docker deps
+
+- Chrome headless docker deps
+- GitLab CICD
+
+
+## 9) Region / Locations
+
+- Countries
+- US State
+
+
+# TODO
+
+- [ ] Chart moving average
 - Local stats
 - Tweet
 - Show rate of change (day over day)
-- Chart moving average?

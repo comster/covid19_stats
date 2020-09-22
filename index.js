@@ -1,6 +1,19 @@
 const fs = require('fs')
-
+// const request = require('request');
+const got = require('got');
+const moment = require('moment');
 const Mastodon = require('mastodon-api')
+
+const d3 = require('d3-node')().d3;
+const d3nLine = require('./d3node-linechart.js');
+const output = require('./d3node-output.js');
+// API 
+const API_URL = "https://corona.lmao.ninja/v2/all"
+const API_URL_HISTORICAL = (countryCode="US", days=90) => "https://disease.sh/v3/covid-19/historical/"+countryCode+"?lastdays="+days
+
+const ROLLING_DAYS = 7
+const DATA_START_DATE = '2020-03-01'
+const DAYS_OF_DATA = moment().diff(moment(DATA_START_DATE), 'days')
 
 const M = new Mastodon({
   access_token: process.env.MASTADON_ACCESS_TOKEN,
@@ -10,7 +23,7 @@ const M = new Mastodon({
 const tootMedia = function(file) {
     return new Promise((resolve, reject) => {
         if(file) {
-            M.post('media', { file: file }).then(resp => {
+            M.post('media', { file: fs.createReadStream(file) }).then(resp => {
                 resolve(resp.data.id)
             })
         } else {
@@ -43,28 +56,9 @@ const toot = function(status, media) {
     })
 }
 
-const API_URL = "https://corona.lmao.ninja/v2/all"
+const fetchStats = async () => 
+    await got(API_URL).json()
 
-const request = require('request');
-
-const fetchStats = function() {
-    return new Promise((resolve, reject) => {
-        request.get(API_URL, function (error, response, body) {
-          console.error('error:', error); // Print the error if one occurred
-          console.log('statusCode:', response && response.statusCode); // Print the response status code if a response was received
-          console.log('body:', body); // Print the HTML for the page.
-          
-          let jsonData = JSON.parse(body)
-          console.log(jsonData)
-          
-          if(error) {
-              reject()
-          } else {
-            resolve(jsonData)
-          }
-        })
-    })
-}
 
 const getMsgFromStats = function(stats) {
     let today = (new Date().toDateString())
@@ -144,22 +138,137 @@ const renderPie = function(data) {
     })
 }
 
-fetchStats().then((stats)=>{
-    let tootMsg = getMsgFromStats(stats)
-    renderPie([
-        {"name": "Active", "value": stats['active']},
-        {"name": "Deaths", "value": stats['deaths']},
-        {"name": "Recovered", "value": stats['recovered']},
-    ]).then(tootMedia => {
-        toot(tootMsg, tootMedia).then(t => {
-            console.log('DONE!')
-            process.exit(0)
-        })
-    })
-})
 
-// toot(
-//     "TOOT TEST!"
-// ).then(t => {
-//     process.exit(0)
+const parseTime = d3.timeParse("%m/%d/%y")
+
+const fetchRollingAvg = async (countryCode, days) => {
+    let data = await got(API_URL_HISTORICAL(countryCode, days)).json()
+    
+    // console.log(data)
+    
+    let timeline = data.timeline
+    let keys = ['cases', 'deaths']
+    
+    let vals = {} // { "cases": [{key: Date, value: int}...], "deaths": [...]}
+    let rollingAverages = {} // { "cases": [...], "deaths": [...]}
+    
+    keys.forEach(k => {
+        // console.log(k)
+        // console.log(timeline[k])
+        if(!vals.hasOwnProperty(k)) {
+            vals[k] = []
+        }
+        let prevVal = false
+        let diffs = {}
+        for(let date in timeline[k]) {
+            
+            let value = timeline[k][date]
+            if(prevVal !== false) {
+                diffs[date] = value - prevVal
+                vals[k].push({
+                    key: parseTime(date),
+                    value: diffs[date]
+                })
+            }
+            prevVal = value
+        }
+        // console.log(vals)
+        
+        if(!rollingAverages.hasOwnProperty(k)) {
+            rollingAverages[k] = []
+        }
+        for(let i in vals[k]) {
+            if(i >= ROLLING_DAYS-1) {
+                let v = vals[k][i]
+                let avg = v.value
+                let x = 1
+                while(x < ROLLING_DAYS) {
+                    avg = avg + vals[k][i - x].value
+                    x++
+                }
+                avg = avg / ROLLING_DAYS
+                rollingAverages[k].push({
+                    key: v.key,
+                    value: avg
+                })
+            }
+        }
+        // console.log(rollingAverages)
+    })
+    
+    return rollingAverages
+}
+
+
+const renderLineChart = (stats, sourceName) => {
+
+    // console.log(stats)
+    // stats = {deaths: [], cases: []}
+    
+    let chartData = []
+    chartData.allKeys = stats.deaths.map(o => o.key)
+    chartData.push(stats.deaths)
+    chartData.push(stats.cases)
+    // console.log(chartData)
+    
+    let chartTitle = sourceName+' covid <span style="color: maroon;">deaths</span> and <span style="color: steelblue;">cases</span> '+ROLLING_DAYS+'-day rolling average'
+    return new Promise((resolve, reject) => {
+        output(
+            "./output/chart",
+            d3nLine({
+                data: chartData,
+                margin: { top: 10, right: 70, bottom: 55, left: 45 },
+                lineWidth: 6,
+                isCurve: true,
+                width: 500,
+                height: 300,
+                lineColor: '#ff0000',
+                lineColors: ['maroon', 'steelblue'],
+                container: `
+                    <div id="container">
+                        <h3 style="padding: 0 0; margin: 0 0;">${chartTitle}</h3>
+                        <div id="chart"></div>
+                    </div>
+                `
+            }),
+            { 
+                width: 500,
+                height: 300,
+            },
+            function(){
+                resolve('./output/chart.png')
+            }
+        );
+    })
+}
+
+const run = async () => {
+    let stats = await fetchStats()
+    let tootMsg = getMsgFromStats(stats)
+    // console.log(tootMsg)
+    
+    let rollingAvgStats = await fetchRollingAvg("US", DAYS_OF_DATA)
+    let pngPath = await renderLineChart(rollingAvgStats, "US")
+    console.log("PNG path: "+pngPath)
+    
+    let t = await toot(tootMsg, pngPath)
+    // console.log('DONE!')
+    // process.exit(0)
+    
+    // post media
+    // toot
+}
+run()
+// fetchStats().then((stats)=>{
+    // let tootMsg = getMsgFromStats(stats)
+    // renderPie([
+    //     {"name": "Active", "value": stats['active']},
+    //     {"name": "Deaths", "value": stats['deaths']},
+    //     {"name": "Recovered", "value": stats['recovered']},
+    // ]).then(tootMedia => {
+        // toot(tootMsg, tootMedia).then(t => {
+        //     console.log('DONE!')
+        //     process.exit(0)
+        // })
+    // })
 // })
