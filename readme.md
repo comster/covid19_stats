@@ -2,7 +2,7 @@
 
 This is a demo project that will automatically post Covid-19 stats to mastadon (toot).
 
-[https://mastodon.cloud/@covid_stats](https://mastodon.cloud/@covid_stats)
+[Tweets @corona19_stats](https://twitter.com/corona19_stats) | [toots @covid_stats@mastodon.cloud](https://mastodon.cloud/@covid_stats)
 
 [GitLab](https://gitlab.com/comster/covid19_stats) | [GitHub](https://github.com/comster/covid19_stats)
 
@@ -80,6 +80,6 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 
 - [x] Chart moving average
 - [x] Regional stats (Countries & US States)
-- Tweet
+- [x] Tweet
 - Subscribe to hashtag
 - https://botsin.space/auth/sign_up

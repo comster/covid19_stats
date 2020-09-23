@@ -1,13 +1,14 @@
 const fs = require('fs')
-const got = require('got');
-const moment = require('moment');
+const got = require('got')
+const moment = require('moment')
 const Mastodon = require('mastodon-api')
 
 const utils = require('./utils')
 
-const d3 = require('d3-node')().d3;
-const d3nLine = require('./d3node-linechart.js');
-const output = require('./d3node-output.js');
+const d3 = require('d3-node')().d3
+const d3nLine = require('./d3node-linechart.js')
+const output = require('./d3node-output.js')
+
 // API 
 const API_URL = (countryCode) => countryCode == 'all' ? "https://corona.lmao.ninja/v2/all" : "https://corona.lmao.ninja/v3/covid-19/countries/"+countryCode
 const API_URL_HISTORICAL = (countryCode="US", days=90) => "https://disease.sh/v3/covid-19/historical/"+countryCode+"?lastdays="+days
@@ -22,7 +23,7 @@ const ROLLING_DAYS = 7
 const DATA_START_DATE = '2020-03-01'
 const DAYS_OF_DATA = moment().diff(moment(DATA_START_DATE), 'days')
 const MAX_COUNTRIES = 52
-const MEDIA_WAIT_TIME = 61 * 1000
+const MEDIA_WAIT_TIME = 60 * 1000
 
 const M = new Mastodon({
   access_token: process.env.MASTADON_ACCESS_TOKEN,
@@ -63,6 +64,51 @@ const toot = function(status, media) {
             })
         })
     })
+}
+
+let twitterClient;
+if(process.env.DO_TWEET) {
+    const Twitter = require('twitter');
+    // twitterClient = new Twitter({
+    //   consumer_key: process.env.TWITTER_KEY,
+    //   consumer_secret: process.env.TWITTER_SECRET,
+    //   bearer_token: process.env.TWITTER_TOKEN
+    // });
+    twitterClient = new Twitter({
+      consumer_key: process.env.TWITTER_KEY,
+      consumer_secret: process.env.TWITTER_SECRET,
+      access_token_key: process.env.TWITTER_ACCESS_TOKEN,
+      access_token_secret: process.env.TWITTER_ACCESS_SECRET
+    });
+}
+
+const tweet = async (statusTxt, filename) => {
+    return new Promise((resolve, reject) => {
+        // Load your image
+        var data = require('fs').readFileSync(filename);
+        // Make post request on media endpoint. Pass file data as media parameter
+        twitterClient.post('media/upload', {media: data}, function(error, media, response) {
+          if (!error) {
+            // If successful, a media object will be returned.
+            // console.log(media);
+            // Lets tweet it
+            var status = {
+              status: statusTxt,
+              media_ids: media.media_id_string // Pass the media id string
+            }
+            twitterClient.post('statuses/update', status, function(error, tweet, response) {
+              if (!error) {
+                // console.log(tweet);
+                console.log('Tweeted!')
+              }
+              resolve()
+            });
+          } else {
+              console.log(error);
+              reject()
+          }
+        });
+    });
 }
 
 const fetchStats = async (region) => {
@@ -241,6 +287,9 @@ const fetchRollingAvg = async (country, days) => {
     return rollingAverages
 }
 
+const IMG_HEIGHT = 335 // 300
+const IMG_WIDTH = 600 // 500
+
 const renderLineChart = (stats, sourceName, flagUrl) => {
     let chartData = []
     chartData.allKeys = stats.deaths.map(o => o.key)
@@ -257,8 +306,8 @@ const renderLineChart = (stats, sourceName, flagUrl) => {
                 margin: { top: 10, right: 70, bottom: 55, left: 45 },
                 lineWidth: 6,
                 isCurve: true,
-                width: 500,
-                height: 300,
+                width: IMG_WIDTH,
+                height: IMG_HEIGHT,
                 lineColor: '#ff0000',
                 lineColors: ['maroon', 'steelblue'],
                 container: `
@@ -270,8 +319,8 @@ const renderLineChart = (stats, sourceName, flagUrl) => {
                 `
             }),
             { 
-                width: 500,
-                height: 300,
+                width: IMG_WIDTH,
+                height: IMG_HEIGHT,
             },
             function(){
                 resolve('./output/chart.png')
@@ -288,7 +337,13 @@ const generateRegionChart = async (country, days) => {
     
     let rollingAvgStats = await fetchRollingAvg(country, days)
     let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag)
-    let t = await toot(tootMsg, pngPath)
+    
+    if(!process.env.EXCLUDE_TOOT) {
+        let t = await toot(tootMsg, pngPath)
+    }
+    if(process.env.DO_TWEET) {
+        let t = await tweet(tootMsg, pngPath)
+    }
 }
 
 const fetchCountries = async max => {
