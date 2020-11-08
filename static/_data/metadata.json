@@ -1,0 +1,25 @@
+{
+  "title": "Covid-19 Stats",
+  "url": "https://covid.yanoagenda.com",
+  "domain": "covid.yanoagenda.com",
+  "description": "Corona virus (COVID-19) stats for US States and Countries of the world",
+  "genre": "Website",
+  "googleAnalyticsId": false,
+  "feed": {
+    "subtitle": "Covid-19 stats",
+    "filename": "feed.xml",
+    "path": "/feed/feed.xml",
+    "id": "https://covid.yanoagenda.com"
+  },
+  "jsonfeed": {
+    "path": "/feed/feed.json",
+    "url": "https://covid.yanoagenda.com/feed/feed.json"
+  },
+  "author": {
+    "name": "Dude named Jeff",
+    "twitterHandle": "corona19_stats"
+  },
+  "publisher": {
+    "name": "Dude named Jeff"
+  }
+}

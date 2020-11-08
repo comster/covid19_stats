@@ -35,6 +35,11 @@ function line({
   const height = _height - _margin.top - _margin.bottom;
 
   const svg = d3n.createSVG(_width, _height)
+        // Use SVG viewbox for scaling nicely in html
+        .attr('viewBox', "0 0 "+_width+" "+_height)
+        .attr('width', null)
+        .attr('height', null)
+        
         .append('g')
         .attr('transform', `translate(${_margin.left}, ${_margin.top})`);
 

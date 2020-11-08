@@ -20,17 +20,31 @@ const API_URL_STATE_FLAG = (state) => "https://raw.githubusercontent.com/CivilSe
 const API_URL_STATE_LANDSCAPE = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/backgrounds/640x360/landscape/"+state.toLocaleLowerCase()+".jpg"
 
 const ROLLING_DAYS = 7
-const DATA_START_DATE = '2020-03-01'
+const DATA_START_DATE = process.env.DATA_START_DATE || '2020-03-01'
 const DAYS_OF_DATA = moment().diff(moment(DATA_START_DATE), 'days')
-const MAX_COUNTRIES = 52
-const MEDIA_WAIT_TIME = 60 * 1000
+const MAX_COUNTRIES = process.env.DO_STATIC ? 9999 : process.env.MAX_COUNTRIES || 52
+const MEDIA_WAIT_TIME = process.env.DO_STATIC ? 1100 : process.env.MEDIA_WAIT_TIME || 60 * 1000
 
-const M = new Mastodon({
-  access_token: process.env.MASTADON_ACCESS_TOKEN,
-  api_url: process.env.MASTADON_API_URL
-})
+const ELEVENTY_DIR = "static"
+const STATIC_SITE_DOMAIN = "covid.yanoagenda.com"
+const STATIC_SITE_URL = "https://"+STATIC_SITE_DOMAIN+"/"
+const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID
+const S3_ACCESS_KEY_SECRET = process.env.S3_ACCESS_KEY_SECRET
+
+let mastodon_api = false
+
+const getMastodonApi = () => {
+    if(!mastodon_api) {
+        mastodon_api = new Mastodon({
+          access_token: process.env.MASTADON_ACCESS_TOKEN,
+          api_url: process.env.MASTADON_API_URL
+        })
+    }
+    return mastodon_api
+}
 
 const tootMedia = function(file) {
+    let M = getMastodonApi()
     return new Promise((resolve, reject) => {
         if(file) {
             M.post('media', { file: fs.createReadStream(file) }).then(resp => {
@@ -43,6 +57,7 @@ const tootMedia = function(file) {
 }
 
 const toot = function(status, media) {
+    let M = getMastodonApi()
     return new Promise((resolve, reject) => {
         tootMedia(media).then(media_id => {
             let statusOpts = {
@@ -122,18 +137,29 @@ const fetchStats = async (region) => {
     }
 }
 
-const getMsgFromStats = function(country, stats) {
+const getMsgFromStats = function(country, stats, exclude_tag) {
     let name = country.name
     let today = (new Date().toDateString())
-    let msg = utils.getCountryCodeName(country)+' COVID-19 current stats for '+today+'\n\n'
+    let msg = ''
+    
+    if(!exclude_tag) {
+        msg += utils.getCountryCodeName(country) + ' COVID-19 current stats for ' + today + '\n\n'
+    }
     
     msg += 'Cases: '+stats['cases'].toLocaleString() + '\n'
     msg += 'Deaths: '+stats['deaths'].toLocaleString() + '\n'
     msg += 'Recovered: '+stats['recovered'].toLocaleString() + '\n'
     msg += 'Active: '+stats['active'].toLocaleString() + '\n'
+    msg += 'Tests: '+stats['tests'].toLocaleString() + '\n'
 
-    msg += '\n'
-    msg += '#covid_'+utils.replaceAll(country.iso2.toLocaleLowerCase(), ' ', '_')
+    if(!exclude_tag) {
+        msg += '\n'
+        msg += '#covid_'+utils.replaceAll(country.iso2.toLocaleLowerCase(), ' ', '_')
+        
+        // Add link to static site
+        msg += '\n'
+        msg += STATIC_SITE_URL+(country.state ? 'states' : 'countries')+'/'+country.iso2
+    }
     
     return msg
 }
@@ -231,6 +257,7 @@ const fetchRollingAvg = async (country, days) => {
         data = await got(url).json()
     } catch(e) {
         console.log('Failed to get historical data for '+countryCode+' via '+url)
+        return false; // No data found!
     }
     let timeline
     if(country.state) {
@@ -238,6 +265,10 @@ const fetchRollingAvg = async (country, days) => {
     } else if(countryCode == 'all') {
         timeline = data
     } else {
+        if(!data || !data.timeline) {
+            console.log('Data not found for '+url)
+            return false; // No data found!
+        }
         timeline = data.timeline
     }
     let keys = ['cases', 'deaths']
@@ -287,8 +318,18 @@ const fetchRollingAvg = async (country, days) => {
     return rollingAverages
 }
 
-const IMG_HEIGHT = 335 // 300
-const IMG_WIDTH = 600 // 500
+const IMG_HEIGHT = process.env.DO_STATIC ? 335*2 : 335 // 300
+const IMG_WIDTH = process.env.DO_STATIC ? 600*2 : 600 // 500
+
+const getChartTitle = (sourceName) => sourceName+' covid <span style="color: maroon;">deaths</span> and <span style="color: steelblue;">cases</span> '+ROLLING_DAYS+'-day rolling average'
+const getFlagImg = (flagUrl) => '<img class="flag-img" src="'+flagUrl+'" style="position:fixed; top: 0; left: 0; opacity:0.12; min-height: 100%; min-width: 500px; width: 100%; height: auto;" />'
+
+const getChartMargin = () => {
+    if(process.env.DO_STATIC) {
+        return { top: 10, right: 120, bottom: 55, left: 120 }
+    }
+    return { top: 10, right: 70, bottom: 55, left: 45 }
+}
 
 const renderLineChart = (stats, sourceName, flagUrl) => {
     let chartData = []
@@ -296,14 +337,14 @@ const renderLineChart = (stats, sourceName, flagUrl) => {
     chartData.push(stats.deaths)
     chartData.push(stats.cases)
     
-    let chartTitle = sourceName+' covid <span style="color: maroon;">deaths</span> and <span style="color: steelblue;">cases</span> '+ROLLING_DAYS+'-day rolling average'
-    let chartBg = flagUrl ? '<img src="'+flagUrl+'" style="position:fixed; top: 0; left: 0; opacity:0.12; min-height: 100%; min-width: 500px; width: 100%; height: auto;" />' : ''
+    let chartTitle = getChartTitle(sourceName)
+    let chartBg = flagUrl ? getFlagImg(flagUrl) : ''
     return new Promise((resolve, reject) => {
         output(
             "./output/chart",
             d3nLine({
                 data: chartData,
-                margin: { top: 10, right: 70, bottom: 55, left: 45 },
+                margin: getChartMargin(),
                 lineWidth: 6,
                 isCurve: true,
                 width: IMG_WIDTH,
@@ -329,20 +370,77 @@ const renderLineChart = (stats, sourceName, flagUrl) => {
     })
 }
 
+const writeStatic = async (country, stats, pngPath, tootMsg) => {
+    // console.log('Write static file as md')
+    // console.log(country)
+    // console.log(stats)
+    let region_bucket = country.state ? 'states' : 'countries'
+    // Move pngPath to ./static/img
+    let static_img_path = 'img/'+country.iso2+'.png'
+    
+    fs.renameSync(pngPath, './static/'+static_img_path)
+    
+    let svg_txt = fs.readFileSync(pngPath.replace('.png', '.svg'))
+    
+    let chart_title = getChartTitle(country.name)
+    
+    let date = moment().format('YYYY-MM-DD')
+    
+    let mdContents = `---
+title: ${utils.getCountryCodeName(country)}
+date: ${date}
+stats_cases: ${stats.cases}
+stats_today_cases: ${stats.todayCases}
+stats_deaths: ${stats.deaths}
+stats_today_deaths: ${stats.todayDeaths}
+stats_recovered: ${stats.recovered}
+stats_active: ${stats.active}
+stats_cases_per_one_million: ${stats.casesPerOneMillion}
+stats_deaths_per_one_million: ${stats.deathsPerOneMillion}
+stats_tests: ${stats.tests}
+stats_tests_per_one_million: ${stats.testsPerOneMillion}
+stats_population: ${stats.population}
+image: ${static_img_path}
+layout: layouts/post.njk
+---
+
+<h4 style="text-align: center;">${chart_title}</h4>
+
+<div class="chart-container">
+${getFlagImg(country.flag)}
+${svg_txt}
+</div>
+`
+// ![Chart](/${static_img_path})
+
+    fs.writeFileSync('./static/'+region_bucket+'/'+country.iso2+'.md', mdContents);
+}
+
 const generateRegionChart = async (country, days) => {
+    console.log('Region: '+country.iso2)
     let stats = await fetchStats(country)
-    let tootMsg = getMsgFromStats(country, stats)
-    
-    console.log(tootMsg)
-    
-    let rollingAvgStats = await fetchRollingAvg(country, days)
-    let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag)
-    
-    if(!process.env.EXCLUDE_TOOT) {
-        let t = await toot(tootMsg, pngPath)
-    }
-    if(process.env.DO_TWEET) {
-        let t = await tweet(tootMsg, pngPath)
+    if(stats) {
+        let tootMsg = getMsgFromStats(country, stats, process.env.DO_STATIC)
+        // console.log(tootMsg)
+        let rollingAvgStats = await fetchRollingAvg(country, days)
+        
+        if(rollingAvgStats) {
+            let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag)
+            if(process.env.DO_STATIC) {
+                let s = await writeStatic(country, stats, pngPath, tootMsg)
+            } else {
+                if(!process.env.EXCLUDE_TOOT) {
+                    let t = await toot(tootMsg, pngPath)
+                }
+                if(process.env.DO_TWEET) {
+                    let t = await tweet(tootMsg, pngPath)
+                }
+            }
+        } else {
+            // no data found
+        }
+    } else {
+        // failed to get stats
     }
 }
 
@@ -352,7 +450,7 @@ const fetchCountries = async max => {
         return countries.map(o => {
             let c = o.countryInfo
             c.name = o.country
-            console.log(c)
+            // console.log(c)
             return c
         }).slice(0, max)
     } catch(e) {
@@ -396,6 +494,47 @@ const isStateIncluded = (state) => {
     return true
 }
 
+const deploy_static_site = () => {
+    return new Promise((resolve, reject) => {
+        const { exec } = require("child_process");
+        exec("npm run build", {"cwd": ELEVENTY_DIR}, (error, stdout, stderr) => {
+            if (error) {
+                console.log(`error: ${error.message}`);
+                // return;
+            }
+            if (stderr) {
+                console.log(`stderr: ${stderr}`);
+                // return;
+            }
+            console.log(`stdout: ${stdout}`);
+            
+            exec("aws s3 sync ./"+ELEVENTY_DIR+"/_site s3://"+STATIC_SITE_DOMAIN+"/", {
+                // "cwd": ELEVENTY_DIR,
+                "env": {
+                    "AWS_ACCESS_KEY_ID": S3_ACCESS_KEY_ID,
+                    "AWS_SECRET_ACCESS_KEY": S3_ACCESS_KEY_SECRET,
+                    "AWS_DEFAULT_REGION": "us-west-2"
+                }
+            }, (error, stdout, stderr) => {
+                if (error) {
+                    console.log(`error: ${error.message}`);
+                    // return;
+                }
+                if (stderr) {
+                    console.log(`stderr: ${stderr}`);
+                    // return;
+                }
+                console.log(`stdout: ${stdout}`);
+            
+                console.log('Done publishing site.')
+                
+                // Sync to S3
+                resolve()
+            });
+        });
+    });
+}
+
 const RUN_WORLD = !process.env.EXCLUDE_WORLD ? true : false
 const RUN_COUNTRIES = !process.env.EXCLUDE_COUNTRIES ? true : false
 const RUN_STATES = !process.env.EXCLUDE_STATES ? true : false
@@ -403,7 +542,7 @@ const RUN_STATES = !process.env.EXCLUDE_STATES ? true : false
 const run = async () => {
     // WORLD
     if(RUN_WORLD) {
-        await generateRegionChart({iso2: 'all', flag: false, name: 'World'}, DAYS_OF_DATA)
+        await generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA)
         await utils.wait(MEDIA_WAIT_TIME)
     }
     
@@ -429,6 +568,10 @@ const run = async () => {
     }
     // await generateRegionChart('all', DAYS_OF_DATA)
     // await generateRegionChart('US', DAYS_OF_DATA)
+    
+    if(process.env.DO_STATIC) {
+        await deploy_static_site()
+    }
     
     process.exit(0)
 }

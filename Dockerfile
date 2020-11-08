@@ -1,5 +1,11 @@
 FROM node:12-buster
 
+RUN apt-get update
+
+RUN apt install awscli -y
+
+RUN aws --version   # Just to make sure its installed alright
+
 # Install latest chrome dev package and fonts to support major charsets (Chinese, Japanese, Arabic, Hebrew, Thai and a few others)
 # Note: this installs the necessary libs to make the bundled version of Chromium that Puppeteer
 # installs, work.
@@ -30,6 +36,16 @@ COPY . /home/pptruser
 RUN ls -la
 
 RUN npm install .
+
+WORKDIR /home/pptruser/static
+
+RUN pwd
+
+RUN ls -la
+
+RUN npm install
+
+RUN cd ..
 
 # CMD [ "npm", "run", "start" ]
 # CMD ["google-chrome-unstable"]

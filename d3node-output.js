@@ -1,6 +1,14 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 
+let DO_LOG = false
+
+const logMsg = msg => {
+  if(DO_LOG) {
+    console.log(msg)
+  }
+}
+
 function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   const screenShotOptions = { viewport, path, quality };
   if (jpeg) {
@@ -28,7 +36,7 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
       page.screenshot(screenShotOptions)
       .then(() => browser.close())
       .then(() => {
-        console.log('>> Exported:', screenShotOptions.path)
+        logMsg('>> Exported:', screenShotOptions.path)
         if (typeof callback === 'function') callback();
       })
       .catch(console.error);
@@ -40,11 +48,15 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
 
 module.exports = function (dest, d3n, opts = {}, callback) {
   const d3 = d3n.d3;
+  
+  if(opts.log) {
+    DO_LOG = true
+  }
 
   if (d3n.options.canvas) {
     const canvas = d3n.options.canvas;
     canvas.pngStream().pipe(fs.createWriteStream(`${dest}.png`));
-    console.log(`>> Exported canvas to ${dest}.png`);
+    logMsg(`>> Exported canvas to ${dest}.png`);
     return;
   }
 
@@ -59,13 +71,15 @@ module.exports = function (dest, d3n, opts = {}, callback) {
 
   const html = d3n.html()
   const svgString = d3n.svgString();
-  fs.writeFile(`${dest}.html`, html, function () {
-    console.log(`>> Exported "${dest}.html", open in a web browser`)
-  });
+  fs.writeFileSync(`${dest}.html`, html)
+  // , function () {
+  logMsg(`>> Exported "${dest}.html", open in a web browser`)
+  // });
 
-  fs.writeFile(`${dest}.svg`, svgString, function () {
-    console.log(`>> Exported "${dest}.svg"`);
-  });
+  fs.writeFileSync(`${dest}.svg`, svgString)
+  // , function () {
+  logMsg(`>> Exported "${dest}.svg"`);
+  // });
 
   const { width, height, jpeg, quality } = opts;
   let viewport = false

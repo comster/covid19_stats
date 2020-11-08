@@ -1,0 +1,7 @@
+<ul>
+{% for state in stateslist %}
+  <li>
+    <a href="{{ state.url | url }}">{% if state.data.title %}{{ state.data.title }}{% else %}<code>{{ state.url }}</code>{% endif %}</a>
+  </li>
+{% endfor %}
+</ul>
