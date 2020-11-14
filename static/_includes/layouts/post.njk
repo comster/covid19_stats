@@ -61,6 +61,27 @@ templateClass: tmpl-post
   </tr>
 {% endif %}
 
+{% if stats_cases_per_one_million %}
+  <tr>
+    <td>Cases per One Million</td>
+    <td>{{ stats_cases_per_one_million.toLocaleString() }}</td>
+  </tr>
+{% endif %}
+
+{% if stats_deaths_per_one_million %}
+  <tr>
+    <td>Deaths per One Million</td>
+    <td>{{ stats_deaths_per_one_million.toLocaleString() }}</td>
+  </tr>
+{% endif %}
+
+{% if stats_tests_per_one_million %}
+  <tr>
+    <td>Tests per One Million</td>
+    <td>{{ stats_tests_per_one_million.toLocaleString() }}</td>
+  </tr>
+{% endif %}
+
 </table>
 
 <share-widget>
