@@ -60,9 +60,9 @@ const getMastodonLists = () => {
             return;
         }
         M.get('lists', function(err, data, response){
-            console.log('get lists...')
-            console.log(err)
-            console.log(data)
+            // console.log('get lists...')
+            // console.log(err)
+            // console.log(data)
             mastodon_lists = data
             resolve(mastodon_lists)
         })
@@ -103,9 +103,9 @@ const getMastodonListUsers = list => {
     let M = getMastodonApi()
     return new Promise((resolve, reject) => {
         M.get('lists/'+list.id+'/accounts', function(err, data, response){
-            console.log('get list accounts...')
-            console.log(err)
-            console.log(data)
+            // console.log('get list accounts...')
+            // console.log(err)
+            // console.log(data)
             resolve(data)
         })
     })
@@ -231,7 +231,7 @@ const getRegionFromMastodonToot = async (in_reply_to_id) => {
 
 const handleNotification = async (notification) => {
     return new Promise(async (resolve, reject) => {
-        console.log('handle notification')
+        // console.log('handle notification')
         // console.log(notification)
         
         if(notification.type === 'mention') {
@@ -257,7 +257,7 @@ const handleNotification = async (notification) => {
                 // Add this use to the list for the region name
                 console.log("USER WANTS TO SUBSCRIBE")
                 console.log(account)
-                console.log(in_reply_to_id)
+                // console.log(in_reply_to_id)
                 let regionCode = await getRegionFromMastodonToot(in_reply_to_id);
                 if(regionCode) {
                     console.log('subscribeMastodonUserToRegion '+regionCode);
@@ -298,10 +298,9 @@ const followMastodonAccount = async (account_id) => {
     let M = getMastodonApi()
     return new Promise(async (resolve, reject) => {
         M.post('accounts/'+account_id+'/follow', function(err, data, response){
-            console.log('follow...')
-            console.log(err)
-            console.log(data)
-            
+            // console.log('follow...')
+            // console.log(err)
+            // console.log(data)
             resolve(data)
         })
     })
@@ -745,7 +744,7 @@ const generateRegionChart = async (country, days) => {
         
         // console.log(doseStats)
         let tootMsg = getMsgFromStats(country, stats, process.env.DO_STATIC, doseStats)
-        // console.log(tootMsg)
+        console.log(tootMsg)
         let rollingAvgStats = await fetchRollingAvg(country, days)
         
         if(rollingAvgStats) {
@@ -866,7 +865,7 @@ const RUN_COUNTRIES = !process.env.EXCLUDE_COUNTRIES ? true : false
 const RUN_STATES = !process.env.EXCLUDE_STATES ? true : false
 
 const run = async () => {
-    if(!process.env.EXCLUDE_TOOT) {
+    if(!process.env.EXCLUDE_TOOT && !process.env.DO_STATIC) {
         if(DO_MASTODON_REPLY) {
             getMastodonNotifications();
         }
@@ -909,6 +908,10 @@ const run = async () => {
 }
 
 run()
+//  generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA).then(()=>{
+//      process.exit(0)
+//  })
+
 // getMastodonNotifications();
 // getSubscribedUsers({iso2: 'asb'})
 // getRegionFromMastodonToot("105888743075751916").then(()=>{

@@ -14,16 +14,19 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   if (jpeg) {
     screenShotOptions.type = 'jpeg'
   }
-  console.log('captureImage...');
+  logMsg('captureImage...');
   return puppeteer.launch({
       executablePath: 'google-chrome-stable'
     })
   .then((browser) => {
-    console.log('Launched browser...');
+    logMsg('Launched browser...');
     browser.newPage()
     .then(async (page) => {
+      logMsg('On page...')
     //   page.setContent(html)
       await page.goto(`data:text/html,${html}`, { waitUntil: 'networkidle0'});
+      
+      logMsg('On html page after waituntil networkidle0...')
     //     await page.goto(url, { waitUntil: 'load' });
     //     await page.goto(url, { waitUntil: 'domcontentloaded' });
     //     await page.goto(url, { waitUntil: 'networkidle0' });
