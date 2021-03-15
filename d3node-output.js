@@ -1,7 +1,7 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 
-let DO_LOG = true
+let DO_LOG = false
 
 const logMsg = msg => {
   if(DO_LOG) {
@@ -17,10 +17,6 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   logMsg('captureImage...');
   return puppeteer.launch({
     executablePath: 'google-chrome-stable',
-    // args: [
-    //   '--no-sandbox',
-    //   '--disable-setuid-sandbox'
-    // ]
     headless: true,
     // devtools: true,
     args: [
@@ -32,7 +28,6 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
     ]
   })
   .then((browser) => {
-    console.log(browser);
     logMsg('Launched browser...');
     browser.newPage()
     .then(async (page) => {

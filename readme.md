@@ -101,6 +101,9 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 - https://botsin.space/auth/sign_up
 - [x] Fix region names (states) with spaces in them for URL's (encode spaces)
 - [x] Hide American Somoa
-- [ ] Reduce the number of places tooted
+- ? Reduce the number of places tooted
 - [x] Add vaccine data
 - [ ] Consider showing vaccine data as % of population
+- Fix sort of countries by name instead of code
+- [ ] Email notifications
+- [ ] Orbit db https://github.com/orbitdb/orbit-db

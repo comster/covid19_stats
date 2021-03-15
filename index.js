@@ -80,19 +80,21 @@ const makeMastodonListName = (listName) => {
     })
 }
 
-const getMastodonListByName = (listName) => {
+const getMastodonListByName = (listName, make) => {
     return new Promise((resolve, reject) => {
         getMastodonLists().then(()=>{
             let listWithName = _.find(mastodon_lists, { 'title': listName });
             if(listWithName) {
                 resolve(listWithName)
-            } else {
+            } else if(make) {
                 // make list and return it
                 makeMastodonListName(listName).then(listWithName => {
                     // mastodon_lists = []
                     mastodon_lists.push(listWithName)
                     resolve(listWithName)
                 })
+            } else {
+                resolve(false)
             }
         })
     })
@@ -106,7 +108,11 @@ const getMastodonListUsers = list => {
             // console.log('get list accounts...')
             // console.log(err)
             // console.log(data)
-            resolve(data)
+            if(err) {
+                resolve([]);
+            } else {
+                resolve(data)
+            }
         })
     })
 }
@@ -159,7 +165,7 @@ const removeUserToMastodonList = async (user_id, list_id) => {
 }
 
 const parseTootForText = function(content) {
-    console.log('parseTootForText', content)
+    // console.log('parseTootForText', content)
     
     let $ = cheerio.load(content);
     
@@ -179,7 +185,7 @@ const parseTootForText = function(content) {
 
 const subscribeMastodonUserToRegion = async (account, regionCode) => {
     return new Promise(async (resolve, reject) => {
-        let list = await getMastodonListByName(regionCode);
+        let list = await getMastodonListByName(regionCode, true);
         // console.log(account);
         // console.log(list);
         await followMastodonAccount(account.id);
@@ -279,7 +285,10 @@ const handleNotification = async (notification) => {
 const getMastodonNotifications = async () => {
     let M = getMastodonApi()
     return new Promise((resolve, reject) => {
-        M.get('notifications', {limit: 40}, async function(err, data, response){
+        M.get('notifications', {
+            limit: 40,
+            exclude_types: ['follow', 'favourite', 'reblog', 'poll', 'follow_request'] // mention // only get mentions
+        }, async function(err, data, response){
             // console.log('notifications...')
             // console.log(err)
             // console.log(data)
@@ -326,7 +335,9 @@ const toot = function(status, media, country) {
             tootMedia(media).then(media_id => {
                 
                 // TODO if this makes the toot too long, split it up
-                if(users) {
+                console.log('users')
+                console.log(users)
+                if(users && users.length > 0) {
                     status = status + '\n\n'
                     status = status + _.map(users, function(user){
                         return '@'+user.acct;
@@ -920,7 +931,7 @@ run()
 // fetchStates().then(async states => {
 // for(let i in states) {
 //     console.log(states[i])
-//     if(states[i].iso2 === 'California' || states[i].iso2 === 'Arizona') {
+//     if(states[i].iso2 === 'Washington' || states[i].iso2 === 'Oregon') {
 //         await generateRegionChart(states[i], DAYS_OF_DATA)
 //         await utils.wait(MEDIA_WAIT_TIME)
 //     }
