@@ -17,9 +17,18 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   logMsg('captureImage...');
   return puppeteer.launch({
     executablePath: 'google-chrome-stable',
+    // args: [
+    //   '--no-sandbox',
+    //   '--disable-setuid-sandbox'
+    // ]
+    headless: true,
+    // devtools: true,
     args: [
+      '--ignore-certificate-errors',
       '--no-sandbox',
-      '--disable-setuid-sandbox'
+      '--disable-setuid-sandbox',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu'
     ]
   })
   .then((browser) => {
