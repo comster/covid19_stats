@@ -84,3 +84,8 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 - [x] Static website
 - Subscribe to hashtag
 - https://botsin.space/auth/sign_up
+- [x] Fix region names (states) with spaces in them for URL's (encode spaces)
+- [x] Hide American Somoa
+- [ ] Reduce the number of places tooted
+- [x] Add vaccine data
+- [ ] Consider showing vaccine data as % of population

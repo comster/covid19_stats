@@ -82,6 +82,13 @@ templateClass: tmpl-post
   </tr>
 {% endif %}
 
+{% if stats_doses %}
+  <tr>
+    <td>Doses</td>
+    <td>{{ stats_doses.toLocaleString() }}</td>
+  </tr>
+{% endif %}
+
 </table>
 
 <share-widget>

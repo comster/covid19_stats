@@ -18,6 +18,7 @@ const API_URL_STATES = () => "https://disease.sh/v3/covid-19/states"
 const API_URL_HISTORICAL_STATE = (s, days=3) => 'https://corona.lmao.ninja/v3/covid-19/historical/usacounties/'+s+'?lastdays='+days
 const API_URL_STATE_FLAG = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/flags/"+utils.replaceAll(state, ' ', '-').toLocaleLowerCase()+"-large.png"
 const API_URL_STATE_LANDSCAPE = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/backgrounds/640x360/landscape/"+state.toLocaleLowerCase()+".jpg"
+const API_URL_COUNTRY_DOSES = (countryCode="US", days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage/countries/"+countryCode+"?lastdays="+days
 
 const ROLLING_DAYS = 7
 const DATA_START_DATE = process.env.DATA_START_DATE || '2020-03-01'
@@ -137,8 +138,22 @@ const fetchStats = async (region) => {
     }
 }
 
-const getMsgFromStats = function(country, stats, exclude_tag) {
-    let name = country.name
+const fetchDoses = async (region) => {
+    let regionCode = region.iso2
+    if(region.state) {
+        return false;
+    }
+    let url = API_URL_COUNTRY_DOSES(regionCode)
+    try {
+        return await got(url).json()
+    } catch(e) {
+        console.log('Failed to fetch doses stats for '+regionCode+' at '+url)
+        // console.log(e);
+    }
+}
+
+const getMsgFromStats = function(country, stats, exclude_tag, doseStats) {
+    // let name = country.name
     let today = (new Date().toDateString())
     let msg = ''
     
@@ -151,6 +166,11 @@ const getMsgFromStats = function(country, stats, exclude_tag) {
     msg += 'Recovered: '+stats['recovered'].toLocaleString() + '\n'
     msg += 'Active: '+stats['active'].toLocaleString() + '\n'
     msg += 'Tests: '+stats['tests'].toLocaleString() + '\n'
+    
+    if(doseStats && doseStats.length > 0) {
+        // console.log(doseStats)
+        msg += 'Doses: '+doseStats[doseStats.length - 1].value.toLocaleString() + '\n'
+    }
 
     if(!exclude_tag) {
         msg += '\n'
@@ -158,7 +178,7 @@ const getMsgFromStats = function(country, stats, exclude_tag) {
         
         // Add link to static site
         msg += '\n'
-        msg += STATIC_SITE_URL+(country.state ? 'states' : 'countries')+'/'+country.iso2
+        msg += STATIC_SITE_URL+(country.state ? 'states' : 'countries')+'/'+encodeURIComponent(country.iso2)
     }
     
     return msg
@@ -321,7 +341,9 @@ const fetchRollingAvg = async (country, days) => {
 const IMG_HEIGHT = process.env.DO_STATIC ? 335*2 : 335 // 300
 const IMG_WIDTH = process.env.DO_STATIC ? 600*2 : 600 // 500
 
-const getChartTitle = (sourceName) => sourceName+' covid <span style="color: maroon;">deaths</span> and <span style="color: steelblue;">cases</span> '+ROLLING_DAYS+'-day rolling average'
+const getChartTitle = (sourceName, dosesStats) => sourceName+' covid '+
+    ((dosesStats.length > 0) ? '<span style="color: seagreen;">doses</span>, ' : '') +
+    '<span style="color: maroon;">deaths</span>, <span style="color: steelblue;">cases</span> '+ROLLING_DAYS+'-day rolling average'
 const getFlagImg = (flagUrl) => '<img class="flag-img" src="'+flagUrl+'" style="position:fixed; top: 0; left: 0; opacity:0.12; min-height: 100%; min-width: 500px; width: 100%; height: auto;" />'
 
 const getChartMargin = () => {
@@ -331,13 +353,16 @@ const getChartMargin = () => {
     return { top: 10, right: 70, bottom: 55, left: 45 }
 }
 
-const renderLineChart = (stats, sourceName, flagUrl) => {
+const renderLineChart = (stats, sourceName, flagUrl, dosesStats) => {
     let chartData = []
     chartData.allKeys = stats.deaths.map(o => o.key)
     chartData.push(stats.deaths)
     chartData.push(stats.cases)
+    chartData.push(dosesStats)
     
-    let chartTitle = getChartTitle(sourceName)
+    // console.log(chartData)
+    
+    let chartTitle = getChartTitle(sourceName, dosesStats)
     let chartBg = flagUrl ? getFlagImg(flagUrl) : ''
     return new Promise((resolve, reject) => {
         output(
@@ -370,7 +395,7 @@ const renderLineChart = (stats, sourceName, flagUrl) => {
     })
 }
 
-const writeStatic = async (country, stats, pngPath, tootMsg) => {
+const writeStatic = async (country, stats, pngPath, tootMsg, doseStats) => {
     // console.log('Write static file as md')
     // console.log(country)
     // console.log(stats)
@@ -382,9 +407,14 @@ const writeStatic = async (country, stats, pngPath, tootMsg) => {
     
     let svg_txt = fs.readFileSync(pngPath.replace('.png', '.svg'))
     
-    let chart_title = getChartTitle(country.name)
+    let chart_title = getChartTitle(country.name, doseStats)
     
     let date = moment().format('YYYY-MM-DD')
+    
+    let dosesGiven = '';
+    if(doseStats && doseStats.length > 0) {
+        dosesGiven = doseStats[doseStats.length - 1].value.toLocaleString()
+    }
     
     let mdContents = `---
 title: ${utils.getCountryCodeName(country)}
@@ -400,6 +430,7 @@ stats_deaths_per_one_million: ${stats.deathsPerOneMillion}
 stats_tests: ${stats.tests}
 stats_tests_per_one_million: ${stats.testsPerOneMillion}
 stats_population: ${stats.population}
+stats_doses: ${dosesGiven}
 image: ${static_img_path}
 layout: layouts/post.njk
 ---
@@ -420,14 +451,27 @@ const generateRegionChart = async (country, days) => {
     console.log('Region: '+country.iso2)
     let stats = await fetchStats(country)
     if(stats) {
-        let tootMsg = getMsgFromStats(country, stats, process.env.DO_STATIC)
+        let doseData = await fetchDoses(country)
+        let doseStats = []
+        if(doseData) {
+            for(var d in doseData.timeline) {
+                doseStats.push({
+                    key: new Date(d),
+                    value: doseData.timeline[d],
+                })
+            }
+        }
+        
+        // console.log(doseStats)
+        let tootMsg = getMsgFromStats(country, stats, process.env.DO_STATIC, doseStats)
         // console.log(tootMsg)
         let rollingAvgStats = await fetchRollingAvg(country, days)
         
         if(rollingAvgStats) {
-            let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag)
+            let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag, doseStats)
+            // console.log("PNG PATH: "+pngPath)
             if(process.env.DO_STATIC) {
-                let s = await writeStatic(country, stats, pngPath, tootMsg)
+                let s = await writeStatic(country, stats, pngPath, tootMsg, doseStats)
             } else {
                 if(!process.env.EXCLUDE_TOOT) {
                     let t = await toot(tootMsg, pngPath)
@@ -490,6 +534,7 @@ const isStateIncluded = (state) => {
         || s === 'Guam'
         || s === 'Puerto Rico'
         || s === 'US Military'
+        || s === 'American Samoa'
     ) return false
     return true
 }

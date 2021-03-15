@@ -18,7 +18,7 @@ function line({
   margin: _margin = { top: 20, right: 20, bottom: 60, left: 30 },
   lineWidth: _lineWidth = 1.5,
   lineColor: _lineColor = 'steelblue',
-  lineColors: _lineColors = ['maroon', 'steelblue'],
+  lineColors: _lineColors = ['maroon', 'steelblue', 'SeaGreen'],
   isCurve: _isCurve = true,
   tickSize: _tickSize = 5,
   tickPadding: _tickPadding = 5,
@@ -53,13 +53,19 @@ function line({
       
   const yScale = d3.scaleLinear()
       .domain(
-                d3.extent(data[0], d => d.value)
-            )
+        d3.extent(data[0], d => d.value)
+      )
       .rangeRound([height, 0]);
   const yScale2 = d3.scaleLinear()
       .domain(
-                d3.extent(data[1], d => d.value)
-            )
+        d3.extent(data[1], d => d.value)
+      )
+      .rangeRound([height, 0]);
+      
+  const yScaleDoses = d3.scaleLinear()
+      .domain(
+        d3.extent(data[2], d => d.value)
+      )
       .rangeRound([height, 0]);
      
   const xAxis = d3.axisBottom(xScale)
@@ -74,15 +80,20 @@ function line({
         .tickPadding(_tickPadding);
 
   const lineChart = d3.line()
-      .x(d => xScale(d.key))
-      .y(d => yScale(d.value));
+    .x(d => xScale(d.key))
+    .y(d => yScale(d.value));
 
   const lineChartTwo = d3.line()
-      .x(d => xScale(d.key))
-      .y(d => yScale2(d.value));
+    .x(d => xScale(d.key))
+    .y(d => yScale2(d.value));
+      
+  const dosesChart = d3.line()
+    .x(d => xScale(d.key))
+    .y(d => yScaleDoses(d.value));
 
   if (_isCurve) lineChart.curve(d3.curveBasis);
   if (_isCurve) lineChartTwo.curve(d3.curveBasis);
+  if (_isCurve) dosesChart.curve(d3.curveBasis);
 
   g.append('g')
     .attr('transform', `translate(0, ${height})`)
@@ -90,6 +101,41 @@ function line({
 
   g.append('g').style("color", _lineColors[0]).call(yAxis);
   g.append('g').attr("transform", "translate(" + width + " ,0)").style("color", '#4682b4').call(yAxisRight);
+
+  g.append('g')
+    .attr('fill', 'none')
+    .attr('stroke-width', _lineWidth) 
+    .append("path")
+    .attr('stroke', "SeaGreen")
+    .attr('d', dosesChart(data[2]))
+    
+    
+  //line labels
+
+  g.append('g')
+  .classed('labels-group', true)
+  .selectAll('text')
+  .data(data[2])
+  .enter()
+
+  .append('text')
+  .filter(function(d, i) { return i === (data[2].length - 1) })
+  .classed('label',true)
+
+  .attr("x", function(d) { return xScale(d.key); })
+  .attr("y", function(d) { return yScaleDoses(d.value); })
+
+  .attr("text-anchor", "end")
+  .attr('fill', "SeaGreen")
+  // .attr('style', "color: SeaGreen;")
+  .attr('font-size', 10)
+  .attr('font-family', "sans-serif")
+  
+  .text(function(d,i){
+    return d3.format(".4s")(d.value);
+  })
+  .attr("transform", "translate(" + -12 + "," + 10 + ")") 
+
 
   g.append('g')
     .attr('fill', 'none')
