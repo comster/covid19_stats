@@ -75,6 +75,21 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 
 - Countries
 - US State
+- 
+
+## 10) Subscriptable
+
+- On each run, via Mastodon
+ + Look through latest notifications to me (limit 50)
+  - If notification msg is @me and has "sub" / "unsub"
+   + Look at the toot it was in reply_to
+    - Grab region code after "#covid_"
+      - Add the user to a mastodon list (and follow them first) by the name of the country code
+   + If no reply_to, check for #code
+ + While generting toots for each region
+  - Check if we have a list by that region name, grab it's users
+  - Add them into the toot msg as @
+
 
 # TODO
 
@@ -82,7 +97,7 @@ Using gitlab CI/CD, let's schedule this to run every day for our [project](https
 - [x] Regional stats (Countries & US States)
 - [x] Tweet
 - [x] Static website
-- Subscribe to hashtag
+- ? Subscribe to hashtag
 - https://botsin.space/auth/sign_up
 - [x] Fix region names (states) with spaces in them for URL's (encode spaces)
 - [x] Hide American Somoa

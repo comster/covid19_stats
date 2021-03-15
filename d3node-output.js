@@ -1,7 +1,7 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 
-let DO_LOG = false
+let DO_LOG = true
 
 const logMsg = msg => {
   if(DO_LOG) {
@@ -14,11 +14,12 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   if (jpeg) {
     screenShotOptions.type = 'jpeg'
   }
-
+  console.log('captureImage...');
   return puppeteer.launch({
-      executablePath: 'google-chrome-unstable'
+      executablePath: 'google-chrome-stable'
     })
   .then((browser) => {
+    console.log('Launched browser...');
     browser.newPage()
     .then(async (page) => {
     //   page.setContent(html)

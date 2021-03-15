@@ -1,7 +1,9 @@
 const fs = require('fs')
+const _ = require('lodash')
 const got = require('got')
 const moment = require('moment')
 const Mastodon = require('mastodon-api')
+const cheerio = require('cheerio')
 
 const utils = require('./utils')
 
@@ -29,6 +31,7 @@ const DATA_START_DATE = process.env.DATA_START_DATE || '2020-03-01'
 const DAYS_OF_DATA = moment().diff(moment(DATA_START_DATE), 'days')
 const MAX_COUNTRIES = process.env.DO_STATIC ? 9999 : process.env.MAX_COUNTRIES || 52
 const MEDIA_WAIT_TIME = process.env.DO_STATIC ? 1100 : process.env.MEDIA_WAIT_TIME || 60 * 1000
+const DO_MASTODON_REPLY = true
 
 const ELEVENTY_DIR = "static"
 const STATIC_SITE_DOMAIN = "covid.yanoagenda.com"
@@ -37,6 +40,7 @@ const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID
 const S3_ACCESS_KEY_SECRET = process.env.S3_ACCESS_KEY_SECRET
 
 let mastodon_api = false
+let mastodon_lists = []
 
 const getMastodonApi = () => {
     if(!mastodon_api) {
@@ -46,6 +50,261 @@ const getMastodonApi = () => {
         })
     }
     return mastodon_api
+}
+
+const getMastodonLists = () => {
+    let M = getMastodonApi()
+    return new Promise((resolve, reject) => {
+        if(mastodon_lists.length !== 0) {
+            resolve(mastodon_lists)
+            return;
+        }
+        M.get('lists', function(err, data, response){
+            console.log('get lists...')
+            console.log(err)
+            console.log(data)
+            mastodon_lists = data
+            resolve(mastodon_lists)
+        })
+    })
+}
+
+const makeMastodonListName = (listName) => {
+    let M = getMastodonApi()
+    return new Promise((resolve, reject) => {
+        M.post('lists', {
+            title: listName
+        }, function(err, data, response){
+            resolve(data);
+        })
+    })
+}
+
+const getMastodonListByName = (listName) => {
+    return new Promise((resolve, reject) => {
+        getMastodonLists().then(()=>{
+            let listWithName = _.find(mastodon_lists, { 'title': listName });
+            if(listWithName) {
+                resolve(listWithName)
+            } else {
+                // make list and return it
+                makeMastodonListName(listName).then(listWithName => {
+                    // mastodon_lists = []
+                    mastodon_lists.push(listWithName)
+                    resolve(listWithName)
+                })
+            }
+        })
+    })
+}
+
+const getMastodonListUsers = list => {
+    // TODO max 40 users
+    let M = getMastodonApi()
+    return new Promise((resolve, reject) => {
+        M.get('lists/'+list.id+'/accounts', function(err, data, response){
+            console.log('get list accounts...')
+            console.log(err)
+            console.log(data)
+            resolve(data)
+        })
+    })
+}
+
+const getSubscribedUsers = async (country) => {
+    // country.iso2
+    let hashedCountry = getHashFriendlyStr(country.iso2)
+    let users = [] // users with @
+    return new Promise(async (resolve, reject) => {
+        
+        // Get from list by the name of 
+        getMastodonListByName(hashedCountry).then(list => {
+            if(list) {
+                
+                getMastodonListUsers(list).then(users => {
+                    resolve(users)
+                })
+                
+            } else {
+                resolve(users)
+            }
+        })
+    })
+}
+
+const addUserToMastodonList = async (user_id, list_id) => {
+    // 
+    let M = getMastodonApi()
+    return new Promise(async (resolve, reject) => {
+        M.post('lists/'+list_id+'/accounts', {account_ids: [ user_id ]}, function(err, data, response){
+            console.log('added user to list '+list_id)
+            // console.log(err)
+            // console.log(data)
+            resolve(data)
+        })
+    });
+}
+
+const removeUserToMastodonList = async (user_id, list_id) => {
+    // 
+    let M = getMastodonApi()
+    return new Promise(async (resolve, reject) => {
+        M.delete('lists/'+list_id+'/accounts', {account_ids: [ user_id ]}, function(err, data, response){
+            console.log('removed user from list '+list_id)
+            // console.log(err)
+            // console.log(data)
+            resolve(data)
+        })
+    });
+}
+
+const parseTootForText = function(content) {
+    console.log('parseTootForText', content)
+    
+    let $ = cheerio.load(content);
+    
+    let text = $.text()
+    
+    console.log(text)
+    
+    // let i = text.indexOf('@'+TOOTER_HANDLE+' ')
+    
+    // if(i !== -1) {
+    //     text = text.substr(i);
+    //     text = text.replace('@'+TOOTER_HANDLE, '').trim();
+    // }
+    
+    return text;
+}
+
+const subscribeMastodonUserToRegion = async (account, regionCode) => {
+    return new Promise(async (resolve, reject) => {
+        let list = await getMastodonListByName(regionCode);
+        // console.log(account);
+        // console.log(list);
+        await followMastodonAccount(account.id);
+        await addUserToMastodonList(account.id, list.id);
+        resolve()
+    })
+}
+
+const unsubscribeMastodonUserToRegion = async (account, regionCode) => {
+    return new Promise(async (resolve, reject) => {
+        let list = await getMastodonListByName(regionCode);
+        // console.log(account);
+        // console.log(list);
+        // await followMastodonAccount(account.id);
+        await removeUserToMastodonList(account.id, list.id);
+        resolve()
+    })
+}
+
+const getRegionFromMastodonToot = async (in_reply_to_id) => {
+    let M = getMastodonApi()
+    return new Promise((resolve, reject) => {
+        console.log("Get status "+in_reply_to_id)
+        M.get('statuses/'+in_reply_to_id, function(err, data, response){
+            // console.log('status...')
+            // console.log(err)
+            // console.log(data)
+            
+            if(err) {
+                resolve(false);
+                return;
+            }
+            
+            let statusMsg = parseTootForText(data.content);
+            let i =statusMsg.indexOf('#covid_');
+            if(i !== -1) {
+                let hashRegion = statusMsg.substr(i);
+                // console.log('hashRegion')
+                // console.log(hashRegion)
+                hashRegion = hashRegion.substr(7, hashRegion.indexOf('https')-7);
+                console.log(hashRegion)
+                resolve(hashRegion)
+            } else {
+                resolve(false)
+            }
+        })
+    })
+}
+
+const handleNotification = async (notification) => {
+    return new Promise(async (resolve, reject) => {
+        console.log('handle notification')
+        // console.log(notification)
+        
+        if(notification.type === 'mention') {
+            let account = notification.account;
+            let statusMsg = notification.status.content;
+            let in_reply_to_id = notification.status.in_reply_to_id;
+            
+            statusMsg = parseTootForText(statusMsg);
+            if(statusMsg.indexOf('unsub') !== -1) {
+                console.log("USER WANTS TO UNSUBSCRIBE")
+                console.log(account)
+                console.log(in_reply_to_id)
+                let regionCode = await getRegionFromMastodonToot(in_reply_to_id);
+                if(regionCode) {
+                    console.log('unsubscribeMastodonUserToRegion '+regionCode);
+                    
+                    await unsubscribeMastodonUserToRegion(account, regionCode);
+                    resolve()
+                } else {
+                    console.log('missing region from replied to toot');
+                }
+            } else if(statusMsg.indexOf('sub') !== -1) {
+                // Add this use to the list for the region name
+                console.log("USER WANTS TO SUBSCRIBE")
+                console.log(account)
+                console.log(in_reply_to_id)
+                let regionCode = await getRegionFromMastodonToot(in_reply_to_id);
+                if(regionCode) {
+                    console.log('subscribeMastodonUserToRegion '+regionCode);
+                    
+                    await subscribeMastodonUserToRegion(account, regionCode);
+                    resolve()
+                } else {
+                    console.log('missing region from replied to toot');
+                }
+            } else {
+                resolve()
+            }
+        } else {
+            resolve()
+        }
+    });
+}
+
+const getMastodonNotifications = async () => {
+    let M = getMastodonApi()
+    return new Promise((resolve, reject) => {
+        M.get('notifications', {limit: 40}, async function(err, data, response){
+            // console.log('notifications...')
+            // console.log(err)
+            // console.log(data)
+            
+            for(let d in data) {
+                let notification = data[d];
+                await handleNotification(notification);
+            }
+            
+            resolve(data)
+        })
+    })
+}
+
+const followMastodonAccount = async (account_id) => {
+    let M = getMastodonApi()
+    return new Promise(async (resolve, reject) => {
+        M.post('accounts/'+account_id+'/follow', function(err, data, response){
+            console.log('follow...')
+            console.log(err)
+            console.log(data)
+            
+            resolve(data)
+        })
+    })
 }
 
 const tootMedia = function(file) {
@@ -61,26 +320,37 @@ const tootMedia = function(file) {
     })
 }
 
-const toot = function(status, media) {
+const toot = function(status, media, country) {
     let M = getMastodonApi()
     return new Promise((resolve, reject) => {
-        tootMedia(media).then(media_id => {
-            let statusOpts = {
-                status: status
-            }
-            if(media_id) {
-                statusOpts.media_ids = [media_id]
-            }
-            M.post('statuses', statusOpts, function(err, t){
-                if(err) {
-                    console.log('Err tooting.')
-                    console.log(err)
-                    reject(err)
-                } else {
-                    console.log('Tooted!')
-                    // console.log(toot)
-                    resolve(t)
+        getSubscribedUsers(country).then(users => {
+            tootMedia(media).then(media_id => {
+                
+                // TODO if this makes the toot too long, split it up
+                if(users) {
+                    status = status + '\n\n'
+                    status = status + _.map(users, function(user){
+                        return '@'+user.acct;
+                    }).join(' ');
                 }
+                
+                let statusOpts = {
+                    status: status
+                }
+                if(media_id) {
+                    statusOpts.media_ids = [media_id]
+                }
+                M.post('statuses', statusOpts, function(err, t){
+                    if(err) {
+                        console.log('Err tooting.')
+                        console.log(err)
+                        reject(err)
+                    } else {
+                        console.log('Tooted!')
+                        // console.log(toot)
+                        resolve(t)
+                    }
+                })
             })
         })
     })
@@ -161,6 +431,8 @@ const fetchDoses = async (region) => {
     }
 }
 
+const getHashFriendlyStr = countryIso2 => utils.replaceAll(countryIso2.toLocaleLowerCase(), ' ', '_');
+
 const getMsgFromStats = function(country, stats, exclude_tag, doseStats) {
     // let name = country.name
     let today = (new Date().toDateString())
@@ -183,7 +455,7 @@ const getMsgFromStats = function(country, stats, exclude_tag, doseStats) {
 
     if(!exclude_tag) {
         msg += '\n'
-        msg += '#covid_'+utils.replaceAll(country.iso2.toLocaleLowerCase(), ' ', '_')
+        msg += '#covid_'+getHashFriendlyStr(country.iso2)
         
         // Add link to static site
         msg += '\n'
@@ -478,12 +750,12 @@ const generateRegionChart = async (country, days) => {
         
         if(rollingAvgStats) {
             let pngPath = await renderLineChart(rollingAvgStats, country.name, country.flag, doseStats)
-            // console.log("PNG PATH: "+pngPath)
+            console.log("PNG PATH: "+pngPath)
             if(process.env.DO_STATIC) {
                 let s = await writeStatic(country, stats, pngPath, tootMsg, doseStats)
             } else {
                 if(!process.env.EXCLUDE_TOOT) {
-                    let t = await toot(tootMsg, pngPath)
+                    let t = await toot(tootMsg, pngPath, country)
                 }
                 if(process.env.DO_TWEET) {
                     let t = await tweet(tootMsg, pngPath)
@@ -594,6 +866,12 @@ const RUN_COUNTRIES = !process.env.EXCLUDE_COUNTRIES ? true : false
 const RUN_STATES = !process.env.EXCLUDE_STATES ? true : false
 
 const run = async () => {
+    if(!process.env.EXCLUDE_TOOT) {
+        if(DO_MASTODON_REPLY) {
+            getMastodonNotifications();
+        }
+    }
+    
     // WORLD
     if(RUN_WORLD) {
         await generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA)
@@ -631,3 +909,17 @@ const run = async () => {
 }
 
 run()
+// getMastodonNotifications();
+// getSubscribedUsers({iso2: 'asb'})
+// getRegionFromMastodonToot("105888743075751916").then(()=>{
+// })
+
+// fetchStates().then(async states => {
+// for(let i in states) {
+//     console.log(states[i])
+//     if(states[i].iso2 === 'California' || states[i].iso2 === 'Arizona') {
+//         await generateRegionChart(states[i], DAYS_OF_DATA)
+//         await utils.wait(MEDIA_WAIT_TIME)
+//     }
+// }
+// })

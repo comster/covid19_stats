@@ -134,7 +134,7 @@ function line({
   .text(function(d,i){
     return d3.format(".4s")(d.value);
   })
-  .attr("transform", "translate(" + -12 + "," + 10 + ")") 
+  .attr("transform", "translate(" + -15 + "," + 14 + ")") 
 
 
   g.append('g')
