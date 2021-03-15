@@ -18,7 +18,11 @@ const API_URL_STATES = () => "https://disease.sh/v3/covid-19/states"
 const API_URL_HISTORICAL_STATE = (s, days=3) => 'https://corona.lmao.ninja/v3/covid-19/historical/usacounties/'+s+'?lastdays='+days
 const API_URL_STATE_FLAG = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/flags/"+utils.replaceAll(state, ' ', '-').toLocaleLowerCase()+"-large.png"
 const API_URL_STATE_LANDSCAPE = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/backgrounds/640x360/landscape/"+state.toLocaleLowerCase()+".jpg"
-const API_URL_COUNTRY_DOSES = (countryCode="US", days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage/countries/"+countryCode+"?lastdays="+days
+const API_URL_COUNTRY_DOSES = (countryCode="US", days="all") => 
+    countryCode == 'all'
+    ? "https://disease.sh/v3/covid-19/vaccine/coverage?lastdays="+days
+    : "https://disease.sh/v3/covid-19/vaccine/coverage/countries/"+countryCode+"?lastdays="+days
+// const API_URL_GLOBAL_DOSES = (days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage?lastdays=all"
 
 const ROLLING_DAYS = 7
 const DATA_START_DATE = process.env.DATA_START_DATE || '2020-03-01'
@@ -143,9 +147,14 @@ const fetchDoses = async (region) => {
     if(region.state) {
         return false;
     }
+    console.log(regionCode)
     let url = API_URL_COUNTRY_DOSES(regionCode)
     try {
-        return await got(url).json()
+        let json = await got(url).json()
+        if(json.hasOwnProperty('timeline')) {
+            json = json.timeline
+        }
+        return json
     } catch(e) {
         console.log('Failed to fetch doses stats for '+regionCode+' at '+url)
         // console.log(e);
@@ -454,10 +463,10 @@ const generateRegionChart = async (country, days) => {
         let doseData = await fetchDoses(country)
         let doseStats = []
         if(doseData) {
-            for(var d in doseData.timeline) {
+            for(var d in doseData) {
                 doseStats.push({
                     key: new Date(d),
-                    value: doseData.timeline[d],
+                    value: doseData[d],
                 })
             }
         }
