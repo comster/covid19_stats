@@ -16,9 +16,14 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
   }
   logMsg('captureImage...');
   return puppeteer.launch({
-      executablePath: 'google-chrome-stable'
-    })
+    executablePath: 'google-chrome-stable',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox'
+    ]
+  })
   .then((browser) => {
+    console.log(browser);
     logMsg('Launched browser...');
     browser.newPage()
     .then(async (page) => {
@@ -43,11 +48,24 @@ function captureImage (html, { jpeg, quality, path, viewport }, callback) {
         logMsg('>> Exported:', screenShotOptions.path)
         if (typeof callback === 'function') callback();
       })
-      .catch(console.error);
+      .catch(function(err){
+        console.log("page.screenshot err")
+        console.log(err);
+        // console.error
+      });
     //   }, 5000) // TODO Fix this (known issue with puppeteer?) // https://github.com/puppeteer/puppeteer/issues/338 // https://github.com/UN-OCHA/tools-snap-service/pull/51/files // https://github.com/puppeteer/puppeteer/issues/728
+    }).catch(function(err){
+      console.log("browser.newPage err")
+      console.log(err);
+      // console.error
     })
   })
-  .catch(console.error)
+  // .catch(console.error)
+  .catch(function(err){
+    console.log("puppeteer.launch err")
+    console.log(err);
+    // console.error
+  })
 }
 
 module.exports = function (dest, d3n, opts = {}, callback) {

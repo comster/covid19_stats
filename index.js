@@ -908,9 +908,9 @@ const run = async () => {
 }
 
 run()
-//  generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA).then(()=>{
-//      process.exit(0)
-//  })
+// generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA).then(()=>{
+//  process.exit(0)
+// })
 
 // getMastodonNotifications();
 // getSubscribedUsers({iso2: 'asb'})
