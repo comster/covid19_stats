@@ -24,6 +24,8 @@ const API_URL_COUNTRY_DOSES = (countryCode="US", days="all") =>
     countryCode == 'all'
     ? "https://disease.sh/v3/covid-19/vaccine/coverage?lastdays="+days
     : "https://disease.sh/v3/covid-19/vaccine/coverage/countries/"+countryCode+"?lastdays="+days
+// const API_URL_STATE_DOSES = (state, days="all") => "http://127.0.0.1:3000/v3/covid-19/vaccine/coverage/states/"+state+"?lastdays="+days
+const API_URL_STATE_DOSES = (state, days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage/states/"+state+"?lastdays="+days
 // const API_URL_GLOBAL_DOSES = (days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage?lastdays=all"
 
 const ROLLING_DAYS = 7
@@ -425,9 +427,19 @@ const fetchStats = async (region) => {
 const fetchDoses = async (region) => {
     let regionCode = region.iso2
     if(region.state) {
+        let url = API_URL_STATE_DOSES(regionCode);
+        try {
+            let json = await got(url).json()
+            if(json.hasOwnProperty('timeline')) {
+                json = json.timeline;
+            }
+            return json;
+        } catch(e) {
+            console.log('Failed to fetch state doses stats for '+regionCode+' at '+url)
+            // console.log(e);
+        }
         return false;
     }
-    console.log(regionCode)
     let url = API_URL_COUNTRY_DOSES(regionCode)
     try {
         let json = await got(url).json()
@@ -749,7 +761,7 @@ const generateRegionChart = async (country, days) => {
                 doseStats.push({
                     key: new Date(d),
                     value: doseData[d],
-                })
+                });
             }
         }
         
@@ -918,7 +930,7 @@ const run = async () => {
     process.exit(0)
 }
 
-run()
+run();
 // generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA).then(()=>{
 //  process.exit(0)
 // })
