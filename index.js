@@ -1,32 +1,33 @@
-const fs = require('fs')
-const _ = require('lodash')
-const got = require('got')
-const moment = require('moment')
-const Mastodon = require('mastodon-api')
-const cheerio = require('cheerio')
+const fs = require('fs');
+const _ = require('lodash');
+const got = require('got');
+const moment = require('moment');
+const Mastodon = require('mastodon-api');
+const cheerio = require('cheerio');
 
-const utils = require('./utils')
+const utils = require('./utils');
 
-const d3 = require('d3-node')().d3
-const d3nLine = require('./d3node-linechart.js')
-const output = require('./d3node-output.js')
+const d3 = require('d3-node')().d3;
+const d3nLine = require('./d3node-linechart.js');
+const output = require('./d3node-output.js');
 
 // API 
-const API_URL = (countryCode) => countryCode == 'all' ? "https://corona.lmao.ninja/v2/all" : "https://corona.lmao.ninja/v3/covid-19/countries/"+countryCode
-const API_URL_HISTORICAL = (countryCode="US", days=90) => "https://disease.sh/v3/covid-19/historical/"+countryCode+"?lastdays="+days
-const API_URL_COUNTRIES = () => "https://disease.sh/v3/covid-19/countries?sort=cases"
-const API_URL_STATE = (stateCode) => "https://disease.sh/v3/covid-19/states/"+stateCode
-const API_URL_STATES = () => "https://disease.sh/v3/covid-19/states"
-const API_URL_HISTORICAL_STATE = (s, days=3) => 'https://corona.lmao.ninja/v3/covid-19/historical/usacounties/'+s+'?lastdays='+days
-const API_URL_STATE_FLAG = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/flags/"+utils.replaceAll(state, ' ', '-').toLocaleLowerCase()+"-large.png"
-const API_URL_STATE_LANDSCAPE = (state) => "https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/backgrounds/640x360/landscape/"+state.toLocaleLowerCase()+".jpg"
+const API_HOST = 'https://disease.sh';
+const API_URL = (countryCode) => countryCode == 'all' ? `${API_HOST}/v2/all` : `${API_HOST}/v3/covid-19/countries/${countryCode}`;
+const API_URL_HISTORICAL = (countryCode="US", days=90) => `${API_HOST}/v3/covid-19/historical/${countryCode}?lastdays=${days}`;
+const API_URL_COUNTRIES = () => `${API_HOST}/v3/covid-19/countries?sort=cases`;
+const API_URL_STATE = (stateCode) => `${API_HOST}/v3/covid-19/states/${stateCode}`;
+const API_URL_STATES = () => `${API_HOST}/v3/covid-19/states`;
+const API_URL_HISTORICAL_STATE = (s, days=3) => `${API_HOST}/v3/covid-19/historical/usacounties/${s}?lastdays=${days}`;
+const API_URL_STATE_FLAG = (state) => `https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/flags/${utils.replaceAll(state, ' ', '-').toLocaleLowerCase()}-large.png`;
+const API_URL_STATE_LANDSCAPE = (state) => `https://raw.githubusercontent.com/CivilServiceUSA/us-states/master/images/backgrounds/640x360/landscape/${state.toLocaleLowerCase()}.jpg`;
 const API_URL_COUNTRY_DOSES = (countryCode="US", days="all") => 
     countryCode == 'all'
-    ? "https://disease.sh/v3/covid-19/vaccine/coverage?lastdays="+days
-    : "https://disease.sh/v3/covid-19/vaccine/coverage/countries/"+countryCode+"?lastdays="+days
-// const API_URL_STATE_DOSES = (state, days="all") => "http://127.0.0.1:3000/v3/covid-19/vaccine/coverage/states/"+state+"?lastdays="+days
-const API_URL_STATE_DOSES = (state, days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage/states/"+state+"?lastdays="+days
-// const API_URL_GLOBAL_DOSES = (days="all") => "https://disease.sh/v3/covid-19/vaccine/coverage?lastdays=all"
+    ? `${API_HOST}/v3/covid-19/vaccine/coverage?lastdays=${days}`
+    : `${API_HOST}/v3/covid-19/vaccine/coverage/countries/${countryCode}?lastdays=${days}`;
+// const API_URL_STATE_DOSES = (state, days="all") => "http://127.0.0.1:3000/v3/covid-19/vaccine/coverage/states/"+state+"?lastdays="+days;
+const API_URL_STATE_DOSES = (state, days="all") => `${API_HOST}/v3/covid-19/vaccine/coverage/states/${state}?lastdays=${days}`;
+// const API_URL_GLOBAL_DOSES = (days="all") => `${API_HOST}/v3/covid-19/vaccine/coverage?lastdays=all`;
 
 const ROLLING_DAYS = 7
 const DATA_START_DATE = process.env.DATA_START_DATE || '2020-03-01'
@@ -931,6 +932,7 @@ const run = async () => {
 }
 
 run();
+
 // generateRegionChart({iso2: 'all', flag: 'https://upload.wikimedia.org/wikipedia/commons/6/60/Earth_from_Space.jpg', name: 'World'}, DAYS_OF_DATA).then(()=>{
 //  process.exit(0)
 // })

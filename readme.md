@@ -23,10 +23,10 @@ Using the code example from my [quick_toot](https://github.com/comster/quick_too
 
 ## 3) Fetch Covid stats
 
-From [this API](https://corona.lmao.ninja/), we will grab the latest coronoa stats.
+From [this API](https://disease.sh/), we will grab the latest coronoa stats.
 
-- Global: https://corona.lmao.ninja/v2/all
-- United States: https://corona.lmao.ninja/v2/countries/us
+- Global: https://disease.sh/v2/all
+- United States: https://disease.sh/v2/countries/us
 - Format data into text to toot
 
 

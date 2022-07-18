@@ -7,6 +7,6 @@ eleventyNavigation:
   order: 3
 ---
 
-Data source: [https://corona.lmao.ninja/](https://corona.lmao.ninja/)
+Data source: [https://disease.sh/](https://disease.sh/)
 
 See the source code here: [https://github.com/comster/covid19_stats](https://github.com/comster/covid19_stats)
