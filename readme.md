@@ -4,7 +4,7 @@ This is a demo project that will automatically post Covid-19 stats to mastadon (
 
 [Website](https://covid.yanoagenda.com) | [Tweets @corona19_stats](https://twitter.com/corona19_stats) | [toots @covid_stats@mastodon.cloud](https://mastodon.cloud/@covid_stats)
 
-[GitLab](https://gitlab.com/covid-stats1/covid19_stats) | [GitHub](https://github.com/comster/covid19_stats)
+[GitLab](https://gitlab.com/alternating-bits-open-source/covid19_stats) | [GitHub](https://github.com/comster/covid19_stats)
 
 ## 1) Automated toots
 
@@ -40,7 +40,7 @@ Using the stats fetched, let's create a pie chart using D3, rendered using canva
 
 ## 5) Schedule to run every day with GitLab
 
-Using gitlab CI/CD, let's schedule this to run every day for our [project](https://gitlab.com/covid-stats1/covid19_stats)
+Using gitlab CI/CD, let's schedule this to run every day for our [project](https://gitlab.com/alternating-bits-open-source/covid19_stats)
 
 - Create .gitignore
 - Create Dockerfile
